@@ -1,0 +1,1389 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chatwork ルーム設計デモツール</title>
+<style>
+:root {
+  --primary: #2C6EAB;
+  --primary-light: #E8F1FA;
+  --primary-dark: #1B4D7A;
+  --accent: #E85D3A;
+  --bg: #F5F7FA;
+  --card: #FFFFFF;
+  --border: #DDE3EA;
+  --text: #2D3748;
+  --text-light: #718096;
+  --success: #38A169;
+  --warning: #D69E2E;
+  --danger: #E53E3E;
+  --radius: 8px;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Yu Gothic', sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+
+/* Header */
+.header { background: var(--primary); color: white; padding: 12px 24px; display: flex; align-items: center; justify-content: space-between; }
+.header h1 { font-size: 18px; font-weight: 600; }
+.header-sub { font-size: 12px; opacity: 0.8; }
+
+/* Step indicator */
+.steps { display: flex; justify-content: center; padding: 16px 24px; background: white; border-bottom: 1px solid var(--border); }
+.step-item { display: flex; align-items: center; gap: 6px; padding: 6px 16px; font-size: 13px; color: var(--text-light); position: relative; }
+.step-item.active { color: var(--primary); font-weight: 600; }
+.step-item.completed { color: var(--success); }
+.step-num { width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; border: 2px solid var(--border); background: white; }
+.step-item.active .step-num { border-color: var(--primary); background: var(--primary); color: white; }
+.step-item.completed .step-num { border-color: var(--success); background: var(--success); color: white; }
+.step-arrow { margin: 0 4px; color: var(--border); }
+
+/* Main */
+.main { max-width: 960px; margin: 0 auto; padding: 24px; }
+.main.full-width { max-width: 100%; padding: 16px 24px; }
+
+/* Cards */
+.card { background: var(--card); border-radius: var(--radius); border: 1px solid var(--border); padding: 24px; margin-bottom: 16px; }
+.card h2 { font-size: 18px; margin-bottom: 16px; color: var(--primary-dark); }
+.card h3 { font-size: 15px; margin-bottom: 12px; color: var(--text); }
+
+/* Forms */
+label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; color: var(--text); }
+.label-hint { font-weight: 400; color: var(--text-light); margin-left: 8px; }
+input[type="text"], textarea, select { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 14px; font-family: inherit; }
+input:focus, textarea:focus, select:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(44,110,171,0.1); }
+.form-group { margin-bottom: 20px; }
+
+/* Industry cards */
+.industry-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+.industry-card { border: 2px solid var(--border); border-radius: var(--radius); padding: 16px; cursor: pointer; transition: all 0.15s; text-align: center; }
+.industry-card:hover { border-color: var(--primary); background: var(--primary-light); }
+.industry-card.selected { border-color: var(--primary); background: var(--primary-light); box-shadow: 0 0 0 3px rgba(44,110,171,0.15); }
+.industry-card .ic-label { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+.industry-card .ic-sub { font-size: 11px; color: var(--text-light); }
+
+/* Size selector */
+.size-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.size-card { border: 2px solid var(--border); border-radius: var(--radius); padding: 12px; cursor: pointer; text-align: center; transition: all 0.15s; }
+.size-card:hover { border-color: var(--primary); }
+.size-card.selected { border-color: var(--primary); background: var(--primary-light); }
+.size-card .sz-label { font-size: 15px; font-weight: 600; }
+.size-card .sz-rooms { font-size: 11px; color: var(--text-light); margin-top: 4px; }
+
+/* Tags */
+.tag-container { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.tag { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; background: var(--primary-light); color: var(--primary); border-radius: 20px; font-size: 13px; }
+.tag .tag-remove { cursor: pointer; font-size: 16px; line-height: 1; opacity: 0.6; }
+.tag .tag-remove:hover { opacity: 1; }
+.tag-input-wrap { display: flex; gap: 8px; }
+.tag-input-wrap input { flex: 1; }
+.tag-input-wrap button { white-space: nowrap; }
+
+/* Suggested tags */
+.suggested-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+.suggested-tag { padding: 3px 8px; background: #F0F0F0; border-radius: 12px; font-size: 11px; cursor: pointer; border: 1px solid transparent; }
+.suggested-tag:hover { border-color: var(--primary); background: var(--primary-light); }
+
+/* Use case checkboxes */
+.usecase-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; }
+.usecase-item { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius); cursor: pointer; font-size: 13px; }
+.usecase-item:hover { background: var(--primary-light); }
+.usecase-item.checked { background: var(--primary-light); border-color: var(--primary); }
+.usecase-item input { display: none; }
+
+/* Buttons */
+.btn { padding: 10px 24px; border: none; border-radius: var(--radius); font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.15s; font-family: inherit; }
+.btn-primary { background: var(--primary); color: white; }
+.btn-primary:hover { background: var(--primary-dark); }
+.btn-secondary { background: white; color: var(--primary); border: 1px solid var(--primary); }
+.btn-secondary:hover { background: var(--primary-light); }
+.btn-danger { background: var(--danger); color: white; }
+.btn-danger:hover { opacity: 0.9; }
+.btn-success { background: var(--success); color: white; }
+.btn-success:hover { opacity: 0.9; }
+.btn-sm { padding: 6px 12px; font-size: 12px; }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Nav */
+.nav-bar { display: flex; justify-content: space-between; align-items: center; margin-top: 24px; }
+.nav-bar .nav-info { font-size: 13px; color: var(--text-light); }
+
+/* Room design */
+.room-category { margin-bottom: 24px; }
+.room-category-header { font-size: 14px; font-weight: 700; color: var(--primary-dark); padding: 8px 0; border-bottom: 2px solid var(--primary); margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
+.room-list { display: flex; flex-direction: column; gap: 8px; }
+.room-item { display: flex; align-items: center; gap: 12px; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius); background: white; transition: all 0.15s; }
+.room-item:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+.room-icon { width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; font-size: 20px; background: var(--bg); border-radius: 6px; cursor: pointer; position: relative; flex-shrink: 0; }
+.room-info { flex: 1; min-width: 0; }
+.room-name { font-size: 14px; font-weight: 600; }
+.room-desc { font-size: 12px; color: var(--text-light); margin-top: 2px; }
+.room-badges { display: flex; gap: 6px; flex-shrink: 0; }
+.room-badge { font-size: 11px; padding: 2px 8px; border-radius: 10px; background: #EDF2F7; color: var(--text-light); }
+.room-badge.msg { background: #E8F5E9; color: #2E7D32; }
+.room-badge.task { background: #FFF8E1; color: #F57F17; }
+.room-actions { display: flex; gap: 4px; flex-shrink: 0; }
+.room-action-btn { width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border: 1px solid var(--border); border-radius: 4px; background: white; cursor: pointer; font-size: 14px; }
+.room-action-btn:hover { background: var(--bg); }
+.room-action-btn.delete:hover { background: #FEE; color: var(--danger); border-color: var(--danger); }
+
+/* Summary bar */
+.summary-bar { display: flex; gap: 24px; padding: 16px 20px; background: var(--primary-light); border-radius: var(--radius); margin-bottom: 20px; }
+.summary-item { text-align: center; }
+.summary-num { font-size: 24px; font-weight: 700; color: var(--primary); }
+.summary-label { font-size: 12px; color: var(--text-light); }
+
+/* Icon picker */
+.icon-picker-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.3); display: none; z-index: 100; align-items: center; justify-content: center; }
+.icon-picker-overlay.show { display: flex; }
+.icon-picker { background: white; border-radius: var(--radius); padding: 20px; max-width: 400px; width: 90%; }
+.icon-picker h3 { margin-bottom: 12px; }
+.icon-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
+.icon-option { width: 48px; height: 48px; display: flex; flex-direction: column; align-items: center; justify-content: center; border: 2px solid var(--border); border-radius: 6px; cursor: pointer; font-size: 20px; transition: all 0.1s; }
+.icon-option:hover { border-color: var(--primary); background: var(--primary-light); }
+.icon-option.selected { border-color: var(--primary); background: var(--primary-light); }
+.icon-option span { font-size: 8px; color: var(--text-light); }
+
+/* Modal */
+.modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.4); display: none; z-index: 200; align-items: center; justify-content: center; }
+.modal-overlay.show { display: flex; }
+.modal { background: white; border-radius: var(--radius); padding: 24px; max-width: 500px; width: 90%; max-height: 80vh; overflow-y: auto; }
+.modal h3 { margin-bottom: 16px; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+
+/* Demo preview */
+.demo-room { margin-bottom: 16px; border: 1px solid var(--border); border-radius: var(--radius); }
+.demo-room-header { padding: 12px 16px; background: var(--bg); border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; cursor: pointer; border-radius: var(--radius) var(--radius) 0 0; }
+.demo-room-header h4 { font-size: 14px; }
+.demo-room-body { padding: 16px; display: none; }
+.demo-room.open .demo-room-body { display: block; }
+.demo-msg { padding: 10px 14px; margin-bottom: 8px; background: #F8F9FA; border-radius: 6px; font-size: 13px; white-space: pre-wrap; word-break: break-word; border-left: 3px solid var(--primary-light); }
+.demo-task { padding: 8px 12px; margin-bottom: 6px; background: #FFFDE7; border-radius: 6px; font-size: 13px; display: flex; justify-content: space-between; align-items: center; }
+.demo-task .task-limit { font-size: 11px; color: var(--text-light); }
+.demo-section-label { font-size: 12px; font-weight: 600; color: var(--text-light); margin: 12px 0 6px; text-transform: uppercase; }
+
+/* API execution */
+.api-config { margin-bottom: 20px; }
+.api-log { max-height: 400px; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; background: #1a1a2e; color: #e0e0e0; }
+.api-log-entry { padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+.api-log-entry.success { color: #4caf50; }
+.api-log-entry.error { color: #f44336; }
+.api-log-entry.info { color: #64b5f6; }
+.progress-bar { height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; margin: 12px 0; }
+.progress-bar-fill { height: 100%; background: var(--primary); transition: width 0.3s; border-radius: 4px; }
+
+/* Edit inline */
+.edit-inline { border: none; background: transparent; font-size: inherit; font-weight: inherit; font-family: inherit; color: inherit; padding: 2px 4px; border-radius: 4px; width: 100%; }
+.edit-inline:focus { outline: none; background: #FFFDE7; border: 1px solid var(--warning); }
+
+/* Add room form */
+.add-room-form { display: grid; gap: 12px; }
+
+/* Export/Import */
+.toolbar { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+
+/* ============================================================
+   Chatwork-like Preview UI
+   ============================================================ */
+.cw-preview-wrap { position: relative; }
+.cw-preview-exit { position: absolute; top: -40px; right: 0; z-index: 10; }
+
+.cw-container { display: flex; height: 80vh; border: 1px solid #ccc; border-radius: 8px; overflow: hidden; background: #fff; box-shadow: 0 4px 24px rgba(0,0,0,0.12); }
+
+/* CW Header */
+.cw-header { background: #3B7BBE; color: white; padding: 8px 16px; display: flex; align-items: center; gap: 12px; font-size: 14px; font-weight: 600; }
+.cw-header-logo { font-size: 18px; letter-spacing: 1px; }
+
+/* CW Sidebar */
+.cw-sidebar { width: 260px; min-width: 260px; background: #F7F8FA; border-right: 1px solid #E0E0E0; display: flex; flex-direction: column; }
+.cw-sidebar-header { padding: 12px 16px; background: #4D8DC9; color: white; font-size: 13px; font-weight: 600; display: flex; align-items: center; justify-content: space-between; }
+.cw-sidebar-search { padding: 8px 12px; border-bottom: 1px solid #E0E0E0; }
+.cw-sidebar-search input { width: 100%; padding: 6px 10px; border: 1px solid #D0D0D0; border-radius: 4px; font-size: 12px; background: white; }
+.cw-room-list { flex: 1; overflow-y: auto; }
+.cw-room-group-label { padding: 6px 16px; font-size: 11px; font-weight: 700; color: #888; text-transform: uppercase; background: #EEF1F5; border-bottom: 1px solid #E0E0E0; }
+.cw-room-entry { display: flex; align-items: center; gap: 10px; padding: 10px 16px; cursor: pointer; border-bottom: 1px solid #F0F0F0; transition: background 0.1s; }
+.cw-room-entry:hover { background: #EBF0F7; }
+.cw-room-entry.active { background: #D6E4F0; border-left: 3px solid #3B7BBE; }
+.cw-room-entry-icon { width: 32px; height: 32px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
+.cw-room-entry-icon.green { background: #C8E6C9; }
+.cw-room-entry-icon.blue { background: #BBDEFB; }
+.cw-room-entry-icon.orange { background: #FFE0B2; }
+.cw-room-entry-icon.purple { background: #E1BEE7; }
+.cw-room-entry-icon.red { background: #FFCDD2; }
+.cw-room-entry-icon.gray { background: #E0E0E0; }
+.cw-room-entry-info { flex: 1; min-width: 0; }
+.cw-room-entry-name { font-size: 13px; font-weight: 600; color: #333; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cw-room-entry-last { font-size: 11px; color: #999; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+.cw-room-entry-badge { background: #E53935; color: white; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 10px; flex-shrink: 0; }
+
+/* CW Main chat area */
+.cw-main { flex: 1; display: flex; flex-direction: column; background: #FAFBFC; }
+.cw-chat-header { padding: 12px 20px; background: white; border-bottom: 1px solid #E0E0E0; display: flex; align-items: center; justify-content: space-between; }
+.cw-chat-header-title { font-size: 15px; font-weight: 700; color: #333; }
+.cw-chat-header-desc { font-size: 11px; color: #999; margin-top: 2px; }
+.cw-chat-header-actions { display: flex; gap: 8px; }
+.cw-chat-header-actions button { padding: 4px 12px; font-size: 12px; border: 1px solid #D0D0D0; border-radius: 4px; background: white; cursor: pointer; color: #555; }
+.cw-chat-header-actions button:hover { background: #F0F0F0; }
+.cw-chat-header-actions button.active { background: #E8F1FA; border-color: #3B7BBE; color: #3B7BBE; }
+
+/* CW Messages */
+.cw-messages { flex: 1; overflow-y: auto; padding: 16px 20px; display: flex; flex-direction: column; gap: 4px; }
+.cw-msg { display: flex; gap: 10px; padding: 8px 0; }
+.cw-msg-avatar { width: 36px; height: 36px; border-radius: 50%; background: #C5CAE9; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; color: white; flex-shrink: 0; }
+.cw-msg-avatar.a1 { background: #5C6BC0; }
+.cw-msg-avatar.a2 { background: #26A69A; }
+.cw-msg-avatar.a3 { background: #EF5350; }
+.cw-msg-avatar.a4 { background: #FFA726; }
+.cw-msg-avatar.a5 { background: #AB47BC; }
+.cw-msg-avatar.a6 { background: #42A5F5; }
+.cw-msg-body { flex: 1; min-width: 0; }
+.cw-msg-meta { display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px; }
+.cw-msg-name { font-size: 13px; font-weight: 700; color: #3B7BBE; }
+.cw-msg-time { font-size: 11px; color: #AAA; }
+.cw-msg-text { font-size: 13px; color: #333; line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
+.cw-msg-text .cw-info-block { border: 1px solid #D0E8D0; border-radius: 4px; margin: 6px 0; overflow: hidden; }
+.cw-msg-text .cw-info-title { background: #E8F5E9; padding: 6px 12px; font-weight: 700; font-size: 13px; color: #2E7D32; border-bottom: 1px solid #D0E8D0; }
+.cw-msg-text .cw-info-body { padding: 10px 12px; font-size: 13px; background: #FAFFF9; }
+.cw-msg-separator { text-align: center; padding: 12px 0; }
+.cw-msg-separator span { font-size: 11px; color: #AAA; background: #FAFBFC; padding: 0 12px; position: relative; }
+.cw-msg-separator::before { content: ''; display: block; height: 1px; background: #E0E0E0; position: relative; top: 18px; }
+
+/* CW Task Panel */
+.cw-task-panel { width: 280px; min-width: 280px; background: white; border-left: 1px solid #E0E0E0; display: flex; flex-direction: column; }
+.cw-task-panel.hidden { display: none; }
+.cw-task-header { padding: 12px 16px; border-bottom: 1px solid #E0E0E0; font-size: 13px; font-weight: 700; color: #333; display: flex; align-items: center; justify-content: space-between; }
+.cw-task-list { flex: 1; overflow-y: auto; padding: 8px; }
+.cw-task-item { padding: 10px 12px; border: 1px solid #E8E8E8; border-radius: 6px; margin-bottom: 8px; background: white; }
+.cw-task-item:hover { background: #FAFBFC; }
+.cw-task-check { display: flex; align-items: flex-start; gap: 8px; }
+.cw-task-checkbox { width: 18px; height: 18px; border: 2px solid #4CAF50; border-radius: 4px; flex-shrink: 0; margin-top: 1px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.cw-task-checkbox.done { background: #4CAF50; color: white; font-size: 12px; }
+.cw-task-text { font-size: 13px; color: #333; flex: 1; }
+.cw-task-meta { display: flex; justify-content: space-between; margin-top: 6px; padding-left: 26px; }
+.cw-task-assignee { font-size: 11px; color: #888; }
+.cw-task-due { font-size: 11px; color: #E65100; }
+.cw-task-due.soon { color: #E53935; font-weight: 600; }
+
+/* CW Input area */
+.cw-input-area { padding: 12px 20px; background: white; border-top: 1px solid #E0E0E0; }
+.cw-input-box { display: flex; gap: 8px; align-items: flex-end; }
+.cw-input-textarea { flex: 1; min-height: 40px; max-height: 120px; padding: 10px 14px; border: 1px solid #D0D0D0; border-radius: 6px; font-size: 13px; font-family: inherit; resize: none; background: #FAFBFC; }
+.cw-input-textarea:focus { outline: none; border-color: #3B7BBE; background: white; }
+.cw-input-send { padding: 10px 20px; background: #4CAF50; color: white; border: none; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; }
+.cw-input-send:hover { background: #43A047; }
+.cw-input-toolbar { display: flex; gap: 12px; padding: 6px 0 0; }
+.cw-input-toolbar button { background: none; border: none; font-size: 16px; cursor: pointer; color: #999; padding: 2px; }
+.cw-input-toolbar button:hover { color: #555; }
+
+/* CW Empty state */
+.cw-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: #AAA; }
+.cw-empty-icon { font-size: 48px; margin-bottom: 12px; }
+.cw-empty-text { font-size: 14px; }
+
+/* Responsive */
+@media (max-width: 768px) {
+  .industry-grid { grid-template-columns: repeat(2, 1fr); }
+  .size-grid { grid-template-columns: repeat(2, 1fr); }
+  .steps { overflow-x: auto; }
+  .summary-bar { flex-wrap: wrap; }
+  .cw-sidebar { width: 200px; min-width: 200px; }
+  .cw-task-panel { display: none; }
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <h1>Chatwork ルーム設計デモツール</h1>
+    <div class="header-sub">業種・規模に合わせたルーム設計とデモデータの投入</div>
+  </div>
+</div>
+
+<div class="steps" id="stepIndicator"></div>
+
+<div class="main" id="app"></div>
+
+<!-- Icon Picker -->
+<div class="icon-picker-overlay" id="iconPicker">
+  <div class="icon-picker">
+    <h3>アイコンを選択</h3>
+    <div class="icon-grid" id="iconGrid"></div>
+    <div style="margin-top:12px;text-align:right">
+      <button class="btn btn-secondary btn-sm" onclick="closeIconPicker()">閉じる</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal" id="modalContent"></div>
+</div>
+
+<script src="templates.js"></script>
+<script src="demo-messages.js"></script>
+<script>
+// ============================================================
+// State
+// ============================================================
+const STEPS = [
+  { num: 1, label: 'ヒアリング' },
+  { num: 2, label: 'ルーム設計' },
+  { num: 3, label: 'カスタマイズ' },
+  { num: 4, label: 'デモデータ確認' },
+  { num: 5, label: 'プレビュー' },
+  { num: 6, label: 'API実行' },
+];
+
+// Demo user names for preview
+const DEMO_USERS = [
+  { name: '山田 太郎', initials: '山田', cls: 'a1' },
+  { name: '佐藤 花子', initials: '佐藤', cls: 'a2' },
+  { name: '田中 一郎', initials: '田中', cls: 'a3' },
+  { name: '鈴木 美咲', initials: '鈴木', cls: 'a4' },
+  { name: '高橋 健太', initials: '高橋', cls: 'a5' },
+  { name: '伊藤 直子', initials: '伊藤', cls: 'a6' },
+];
+
+let previewActiveRoom = null;
+let previewShowTasks = true;
+
+let state = loadState() || {
+  step: 1,
+  hearing: {
+    industry: '',
+    businessType: '',
+    companySize: '',
+    departments: [],
+    useCases: [],
+  },
+  rooms: [],
+  demoData: {},
+  apiToken: localStorage.getItem('cw_api_token') || '',
+  myAccountId: null,
+  createdRoomIds: {},
+};
+
+function loadState() {
+  try {
+    const s = localStorage.getItem('cw_demo_state');
+    return s ? JSON.parse(s) : null;
+  } catch { return null; }
+}
+function saveState() {
+  localStorage.setItem('cw_demo_state', JSON.stringify(state));
+}
+
+// ============================================================
+// Render
+// ============================================================
+function render() {
+  renderSteps();
+  const app = document.getElementById('app');
+  app.classList.toggle('full-width', state.step === 5);
+  switch (state.step) {
+    case 1: renderStep1(app); break;
+    case 2: renderStep2(app); break;
+    case 3: renderStep3(app); break;
+    case 4: renderStep4(app); break;
+    case 5: renderPreview(app); break;
+    case 6: renderStep6(app); break;
+  }
+  saveState();
+}
+
+function renderSteps() {
+  const el = document.getElementById('stepIndicator');
+  el.innerHTML = STEPS.map((s, i) => {
+    const cls = s.num === state.step ? 'active' : (s.num < state.step ? 'completed' : '');
+    const arrow = i < STEPS.length - 1 ? '<span class="step-arrow">▸</span>' : '';
+    return `<div class="step-item ${cls}"><span class="step-num">${s.num < state.step ? '✓' : s.num}</span>${s.label}</div>${arrow}`;
+  }).join('');
+}
+
+// ============================================================
+// Step 1: Hearing
+// ============================================================
+function renderStep1(app) {
+  const h = state.hearing;
+  const allUseCases = ['社内連絡', '顧客・顧問先対応', 'プロジェクト管理', '日報・週報', '承認・決裁', 'ナレッジ共有', 'タスク管理', '社外連携', '案件管理', 'シフト管理', '申し送り', '品質管理'];
+
+  app.innerHTML = `
+    <div class="card">
+      <h2>Step 1: ヒアリング</h2>
+      <p style="color:var(--text-light);margin-bottom:20px">お客様の業種・規模に合わせたルーム設計を行います。</p>
+
+      <div class="form-group">
+        <label>業種・組織タイプ <span class="label-hint">※ 最も近いものを選択</span></label>
+        <div class="industry-grid" id="industryGrid"></div>
+      </div>
+
+      <div class="form-group">
+        <label>事業内容・業態 <span class="label-hint">（任意）</span></label>
+        <input type="text" id="businessType" value="${escHtml(h.businessType)}" placeholder="例：法人向けSaaS、注文住宅、顧問型税理士事務所など" oninput="state.hearing.businessType=this.value;saveState()">
+      </div>
+
+      <div class="form-group">
+        <label>従業員数</label>
+        <div class="size-grid" id="sizeGrid"></div>
+      </div>
+
+      <div class="form-group">
+        <label>部署・チーム構成 <span class="label-hint">（ルーム生成に使用）</span></label>
+        <div class="tag-container" id="deptTags"></div>
+        <div class="tag-input-wrap">
+          <input type="text" id="deptInput" placeholder="部署名を入力してEnter" onkeydown="if(event.key==='Enter'){event.preventDefault();addDept()}">
+          <button class="btn btn-secondary btn-sm" onclick="addDept()">追加</button>
+        </div>
+        <div class="suggested-tags" id="suggestedDepts"></div>
+      </div>
+
+      <div class="form-group">
+        <label>主な用途 <span class="label-hint">（複数選択可）</span></label>
+        <div class="usecase-grid" id="useCaseGrid">
+          ${allUseCases.map(uc => {
+            const checked = h.useCases.includes(uc);
+            return `<div class="usecase-item ${checked?'checked':''}" onclick="toggleUseCase('${uc}')">
+              <input type="checkbox" ${checked?'checked':''}>
+              <span>${uc}</span>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>
+    </div>
+
+    <div class="nav-bar">
+      <div class="nav-info">業種と従業員数は必須です</div>
+      <button class="btn btn-primary" onclick="goToStep2()" ${!h.industry||!h.companySize?'disabled':''}>次へ：ルーム設計 ▸</button>
+    </div>
+  `;
+
+  // Render industry grid
+  const ig = document.getElementById('industryGrid');
+  ig.innerHTML = Object.entries(INDUSTRY_TEMPLATES).map(([key, tmpl]) => `
+    <div class="industry-card ${h.industry===key?'selected':''}" onclick="selectIndustry('${key}')">
+      <div class="ic-label">${tmpl.label}</div>
+      <div class="ic-sub">${tmpl.subtitle}</div>
+    </div>
+  `).join('');
+
+  // Render size grid
+  const sg = document.getElementById('sizeGrid');
+  sg.innerHTML = Object.entries(SIZE_SCALE).map(([key, s]) => `
+    <div class="size-card ${h.companySize===key?'selected':''}" onclick="selectSize('${key}')">
+      <div class="sz-label">${s.label}</div>
+      <div class="sz-rooms">推奨 ${s.maxRooms}ルーム以内</div>
+    </div>
+  `).join('');
+
+  renderDeptTags();
+  renderSuggestedDepts();
+}
+
+function selectIndustry(key) {
+  state.hearing.industry = key;
+  const tmpl = INDUSTRY_TEMPLATES[key];
+  if (tmpl && state.hearing.departments.length === 0) {
+    state.hearing.departments = [...tmpl.suggestedDepts];
+  }
+  if (tmpl && state.hearing.useCases.length === 0) {
+    state.hearing.useCases = [...(tmpl.useCases || [])];
+  }
+  render();
+}
+
+function selectSize(key) {
+  state.hearing.companySize = key;
+  render();
+}
+
+function addDept() {
+  const input = document.getElementById('deptInput');
+  const val = input.value.trim();
+  if (val && !state.hearing.departments.includes(val)) {
+    state.hearing.departments.push(val);
+    input.value = '';
+    renderDeptTags();
+    saveState();
+  }
+}
+
+function removeDept(dept) {
+  state.hearing.departments = state.hearing.departments.filter(d => d !== dept);
+  renderDeptTags();
+  saveState();
+}
+
+function renderDeptTags() {
+  const el = document.getElementById('deptTags');
+  if (!el) return;
+  el.innerHTML = state.hearing.departments.map(d =>
+    `<span class="tag">${escHtml(d)}<span class="tag-remove" onclick="removeDept('${escHtml(d)}')">&times;</span></span>`
+  ).join('');
+}
+
+function renderSuggestedDepts() {
+  const el = document.getElementById('suggestedDepts');
+  if (!el) return;
+  const tmpl = INDUSTRY_TEMPLATES[state.hearing.industry];
+  if (!tmpl) { el.innerHTML = ''; return; }
+  const existing = new Set(state.hearing.departments);
+  const suggestions = tmpl.suggestedDepts.filter(d => !existing.has(d));
+  el.innerHTML = suggestions.length ? '<span style="font-size:11px;color:var(--text-light)">候補：</span>' + suggestions.map(d =>
+    `<span class="suggested-tag" onclick="state.hearing.departments.push('${d}');render()">+ ${d}</span>`
+  ).join('') : '';
+}
+
+function toggleUseCase(uc) {
+  const idx = state.hearing.useCases.indexOf(uc);
+  if (idx >= 0) state.hearing.useCases.splice(idx, 1);
+  else state.hearing.useCases.push(uc);
+  render();
+}
+
+function goToStep2() {
+  state.rooms = generateRooms(state.hearing);
+  state.demoData = generateDemoData(state.rooms);
+  state.step = 2;
+  render();
+}
+
+// ============================================================
+// Step 2: Room Design (Preview)
+// ============================================================
+function renderStep2(app) {
+  const rooms = state.rooms;
+  const categories = [...new Set(rooms.map(r => r.category))];
+  const totalMsgs = Object.values(state.demoData).reduce((s, d) => s + d.messages.length, 0);
+  const totalTasks = Object.values(state.demoData).reduce((s, d) => s + d.tasks.length, 0);
+
+  app.innerHTML = `
+    <div class="card">
+      <h2>Step 2: ルーム設計</h2>
+      <p style="color:var(--text-light);margin-bottom:20px">
+        <strong>${INDUSTRY_TEMPLATES[state.hearing.industry]?.label}</strong>（${SIZE_SCALE[state.hearing.companySize]?.label}）向けのルーム構成です。
+      </p>
+
+      <div class="summary-bar">
+        <div class="summary-item"><div class="summary-num">${rooms.length}</div><div class="summary-label">ルーム</div></div>
+        <div class="summary-item"><div class="summary-num">${categories.length}</div><div class="summary-label">カテゴリ</div></div>
+        <div class="summary-item"><div class="summary-num">${totalMsgs}</div><div class="summary-label">メッセージ</div></div>
+        <div class="summary-item"><div class="summary-num">${totalTasks}</div><div class="summary-label">タスク</div></div>
+      </div>
+
+      ${categories.map(cat => renderCategoryRooms(cat, rooms.filter(r => r.category === cat), false)).join('')}
+    </div>
+
+    <div class="nav-bar">
+      <button class="btn btn-secondary" onclick="state.step=1;render()">◂ 戻る</button>
+      <div>
+        <button class="btn btn-secondary" onclick="state.step=1;state.rooms=[];render()" style="margin-right:8px">再設計</button>
+        <button class="btn btn-primary" onclick="state.step=3;render()">次へ：カスタマイズ ▸</button>
+      </div>
+    </div>
+  `;
+}
+
+function renderCategoryRooms(cat, rooms, editable) {
+  return `
+    <div class="room-category">
+      <div class="room-category-header">
+        <span>${cat}（${rooms.length}）</span>
+        ${editable ? `<button class="btn btn-secondary btn-sm" onclick="openAddRoomModal('${escHtml(cat)}')">+ ルーム追加</button>` : ''}
+      </div>
+      <div class="room-list">
+        ${rooms.map(r => renderRoomItem(r, editable)).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function renderRoomItem(room, editable) {
+  const icon = ICON_OPTIONS.find(i => i.id === room.icon);
+  const data = state.demoData[room.id] || { messages: [], tasks: [] };
+  const msgCount = data.messages.length;
+  const taskCount = data.tasks.length;
+
+  if (editable) {
+    return `
+      <div class="room-item" data-room-id="${room.id}">
+        <div class="room-icon" onclick="openIconPicker('${room.id}')" title="アイコンを変更">${icon?.emoji || '📁'}</div>
+        <div class="room-info">
+          <input class="edit-inline room-name" value="${escHtml(room.name)}" onchange="updateRoomName('${room.id}',this.value)">
+          <input class="edit-inline room-desc" value="${escHtml(room.description)}" onchange="updateRoomDesc('${room.id}',this.value)" style="font-size:12px;color:var(--text-light)">
+        </div>
+        <div class="room-badges">
+          <span class="room-badge msg">${msgCount} msg</span>
+          <span class="room-badge task">${taskCount} task</span>
+        </div>
+        <div class="room-actions">
+          <button class="room-action-btn delete" onclick="deleteRoom('${room.id}')" title="削除">✕</button>
+        </div>
+      </div>
+    `;
+  }
+  return `
+    <div class="room-item">
+      <div class="room-icon">${icon?.emoji || '📁'}</div>
+      <div class="room-info">
+        <div class="room-name">${escHtml(room.name)}</div>
+        <div class="room-desc">${escHtml(room.description)}</div>
+      </div>
+      <div class="room-badges">
+        <span class="room-badge msg">${msgCount} msg</span>
+        <span class="room-badge task">${taskCount} task</span>
+      </div>
+    </div>
+  `;
+}
+
+// ============================================================
+// Step 3: Customize
+// ============================================================
+function renderStep3(app) {
+  const rooms = state.rooms;
+  const categories = [...new Set(rooms.map(r => r.category))];
+  const totalMsgs = Object.values(state.demoData).reduce((s, d) => s + d.messages.length, 0);
+  const totalTasks = Object.values(state.demoData).reduce((s, d) => s + d.tasks.length, 0);
+
+  app.innerHTML = `
+    <div class="card">
+      <h2>Step 3: カスタマイズ</h2>
+      <p style="color:var(--text-light);margin-bottom:16px">ルーム名・アイコンの変更、ルームの追加・削除ができます。</p>
+
+      <div class="toolbar">
+        <button class="btn btn-secondary btn-sm" onclick="openAddRoomModal('')">+ 新しいルームを追加</button>
+        <button class="btn btn-secondary btn-sm" onclick="exportConfig()">設定をエクスポート</button>
+        <button class="btn btn-secondary btn-sm" onclick="document.getElementById('importFile').click()">設定をインポート</button>
+        <input type="file" id="importFile" accept=".json" style="display:none" onchange="importConfig(event)">
+      </div>
+
+      <div class="summary-bar">
+        <div class="summary-item"><div class="summary-num">${rooms.length}</div><div class="summary-label">ルーム</div></div>
+        <div class="summary-item"><div class="summary-num">${categories.length}</div><div class="summary-label">カテゴリ</div></div>
+        <div class="summary-item"><div class="summary-num">${totalMsgs}</div><div class="summary-label">メッセージ</div></div>
+        <div class="summary-item"><div class="summary-num">${totalTasks}</div><div class="summary-label">タスク</div></div>
+      </div>
+
+      ${categories.map(cat => renderCategoryRooms(cat, rooms.filter(r => r.category === cat), true)).join('')}
+    </div>
+
+    <div class="nav-bar">
+      <button class="btn btn-secondary" onclick="state.step=2;render()">◂ 戻る</button>
+      <button class="btn btn-primary" onclick="state.step=4;render()">次へ：デモデータ確認 ▸</button>
+    </div>
+  `;
+}
+
+// Room editing functions
+function updateRoomName(id, val) {
+  const r = state.rooms.find(r => r.id === id);
+  if (r) { r.name = val; saveState(); }
+}
+function updateRoomDesc(id, val) {
+  const r = state.rooms.find(r => r.id === id);
+  if (r) { r.description = val; saveState(); }
+}
+function deleteRoom(id) {
+  if (!confirm('このルームを削除しますか？')) return;
+  state.rooms = state.rooms.filter(r => r.id !== id);
+  delete state.demoData[id];
+  render();
+}
+
+// Icon picker
+let iconPickerTarget = null;
+function openIconPicker(roomId) {
+  iconPickerTarget = roomId;
+  const room = state.rooms.find(r => r.id === roomId);
+  const grid = document.getElementById('iconGrid');
+  grid.innerHTML = ICON_OPTIONS.map(ic => `
+    <div class="icon-option ${room?.icon===ic.id?'selected':''}" onclick="selectIcon('${ic.id}')">
+      ${ic.emoji}<span>${ic.label}</span>
+    </div>
+  `).join('');
+  document.getElementById('iconPicker').classList.add('show');
+}
+function closeIconPicker() {
+  document.getElementById('iconPicker').classList.remove('show');
+  iconPickerTarget = null;
+}
+function selectIcon(iconId) {
+  if (iconPickerTarget) {
+    const r = state.rooms.find(r => r.id === iconPickerTarget);
+    if (r) r.icon = iconId;
+  }
+  closeIconPicker();
+  render();
+}
+
+// Add room modal
+function openAddRoomModal(category) {
+  const categories = [...new Set(state.rooms.map(r => r.category))];
+  const archetypes = [...new Set(Object.keys(DEMO_CONTENT))];
+  const modal = document.getElementById('modalContent');
+  modal.innerHTML = `
+    <h3>ルームを追加</h3>
+    <div class="add-room-form">
+      <div class="form-group">
+        <label>ルーム名</label>
+        <input type="text" id="newRoomName" placeholder="【部門】チーム名">
+      </div>
+      <div class="form-group">
+        <label>説明</label>
+        <input type="text" id="newRoomDesc" placeholder="このルームの用途">
+      </div>
+      <div class="form-group">
+        <label>カテゴリ</label>
+        <div style="display:flex;gap:8px">
+          <select id="newRoomCategory">
+            ${categories.map(c => `<option value="${escHtml(c)}" ${c===category?'selected':''}>${escHtml(c)}</option>`).join('')}
+            <option value="__new__">新しいカテゴリ...</option>
+          </select>
+          <input type="text" id="newRoomCategoryCustom" placeholder="カテゴリ名" style="display:none">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>アイコン</label>
+        <div style="display:flex;flex-wrap:wrap;gap:6px">
+          ${ICON_OPTIONS.map(ic => `
+            <div class="icon-option" style="width:40px;height:40px" onclick="document.querySelectorAll('.add-room-form .icon-option').forEach(e=>e.classList.remove('selected'));this.classList.add('selected');this.dataset.icon='${ic.id}'" data-icon="${ic.id}">
+              ${ic.emoji}
+            </div>
+          `).join('')}
+        </div>
+      </div>
+      <div class="form-group">
+        <label>デモデータテンプレート</label>
+        <select id="newRoomArchetype">
+          <option value="">なし（空のルーム）</option>
+          ${archetypes.map(a => `<option value="${a}">${a}</option>`).join('')}
+        </select>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal()">キャンセル</button>
+      <button class="btn btn-primary" onclick="addNewRoom()">追加</button>
+    </div>
+  `;
+  document.getElementById('newRoomCategory').addEventListener('change', function() {
+    document.getElementById('newRoomCategoryCustom').style.display = this.value === '__new__' ? 'block' : 'none';
+  });
+  document.getElementById('modalOverlay').classList.add('show');
+}
+
+function addNewRoom() {
+  const name = document.getElementById('newRoomName').value.trim();
+  if (!name) { alert('ルーム名を入力してください'); return; }
+  const desc = document.getElementById('newRoomDesc').value.trim();
+  let category = document.getElementById('newRoomCategory').value;
+  if (category === '__new__') {
+    category = document.getElementById('newRoomCategoryCustom').value.trim();
+    if (!category) { alert('カテゴリ名を入力してください'); return; }
+  }
+  const selectedIcon = document.querySelector('.add-room-form .icon-option.selected');
+  const icon = selectedIcon ? selectedIcon.dataset.icon : 'group';
+  const archetype = document.getElementById('newRoomArchetype').value;
+
+  const id = `room_${Date.now()}`;
+  state.rooms.push({ id, name, icon, description: desc, category, archetype });
+
+  if (archetype && DEMO_CONTENT[archetype]) {
+    const content = DEMO_CONTENT[archetype];
+    state.demoData[id] = {
+      messages: content.messages.map(m => ({ ...m })),
+      tasks: content.tasks.map(t => ({
+        ...t,
+        limit: t.limitDays !== undefined ? Math.floor(Date.now()/1000) + t.limitDays * 86400 : undefined,
+      })),
+    };
+  } else {
+    state.demoData[id] = { messages: [], tasks: [] };
+  }
+
+  closeModal();
+  render();
+}
+
+function closeModal() {
+  document.getElementById('modalOverlay').classList.remove('show');
+}
+
+// Export/Import
+function exportConfig() {
+  const data = { hearing: state.hearing, rooms: state.rooms, demoData: state.demoData };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `cw-room-design_${state.hearing.industry}_${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function importConfig(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (data.rooms) state.rooms = data.rooms;
+      if (data.demoData) state.demoData = data.demoData;
+      if (data.hearing) state.hearing = data.hearing;
+      render();
+    } catch { alert('ファイルの読み込みに失敗しました'); }
+  };
+  reader.readAsText(file);
+  event.target.value = '';
+}
+
+// ============================================================
+// Step 4: Demo Data Preview
+// ============================================================
+function renderStep4(app) {
+  const rooms = state.rooms;
+  app.innerHTML = `
+    <div class="card">
+      <h2>Step 4: デモデータ確認</h2>
+      <p style="color:var(--text-light);margin-bottom:16px">各ルームに投稿されるメッセージとタスクのプレビューです。クリックで展開できます。</p>
+
+      ${rooms.map(r => {
+        const data = state.demoData[r.id] || { messages: [], tasks: [] };
+        const icon = ICON_OPTIONS.find(i => i.id === r.icon);
+        return `
+          <div class="demo-room" id="demo-${r.id}">
+            <div class="demo-room-header" onclick="toggleDemoRoom('${r.id}')">
+              <h4>${icon?.emoji || '📁'} ${escHtml(r.name)}</h4>
+              <span style="font-size:12px;color:var(--text-light)">${data.messages.length} msg / ${data.tasks.length} task ▾</span>
+            </div>
+            <div class="demo-room-body">
+              ${data.messages.length ? `
+                <div class="demo-section-label">メッセージ</div>
+                ${data.messages.map((m, i) => `
+                  <div class="demo-msg">
+                    <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+                      <span style="font-size:11px;color:var(--text-light)">#${i+1}</span>
+                      <button class="btn btn-sm" style="padding:2px 6px;font-size:10px;background:#fee;color:var(--danger);border:1px solid var(--danger)" onclick="removeDemoMsg('${r.id}',${i})">削除</button>
+                    </div>
+                    ${formatCwMessage(m.body)}
+                  </div>
+                `).join('')}
+              ` : '<p style="color:var(--text-light);font-size:13px">メッセージなし</p>'}
+              ${data.tasks.length ? `
+                <div class="demo-section-label">タスク</div>
+                ${data.tasks.map((t, i) => `
+                  <div class="demo-task">
+                    <span>☐ ${escHtml(t.body)}</span>
+                    <span class="task-limit">${t.limit ? formatDate(t.limit) : '期限なし'}</span>
+                  </div>
+                `).join('')}
+              ` : ''}
+            </div>
+          </div>
+        `;
+      }).join('')}
+    </div>
+
+    <div class="nav-bar">
+      <button class="btn btn-secondary" onclick="state.step=3;render()">◂ 戻る</button>
+      <button class="btn btn-primary" onclick="state.step=5;render()">次へ：プレビュー ▸</button>
+    </div>
+  `;
+}
+
+function toggleDemoRoom(id) {
+  document.getElementById(`demo-${id}`).classList.toggle('open');
+}
+
+function removeDemoMsg(roomId, idx) {
+  state.demoData[roomId].messages.splice(idx, 1);
+  render();
+}
+
+function formatCwMessage(body) {
+  let html = escHtml(body);
+  // [info][title]...[/title]...[/info]
+  html = html.replace(/\[info\]\[title\](.*?)\[\/title\]([\s\S]*?)\[\/info\]/g,
+    '<div style="border:1px solid var(--border);border-radius:4px;margin:4px 0"><div style="background:var(--bg);padding:4px 8px;font-weight:600;font-size:12px;border-bottom:1px solid var(--border)">$1</div><div style="padding:8px;font-size:12px">$2</div></div>');
+  html = html.replace(/\[info\]([\s\S]*?)\[\/info\]/g,
+    '<div style="border:1px solid var(--border);border-radius:4px;padding:8px;margin:4px 0;font-size:12px">$1</div>');
+  html = html.replace(/\[code\]([\s\S]*?)\[\/code\]/g,
+    '<pre style="background:#f5f5f5;padding:8px;border-radius:4px;font-size:11px;overflow-x:auto">$1</pre>');
+  html = html.replace(/\[hr\]/g, '<hr style="border:none;border-top:1px solid var(--border);margin:8px 0">');
+  html = html.replace(/\n/g, '<br>');
+  return html;
+}
+
+function formatDate(unix) {
+  const d = new Date(unix * 1000);
+  return `${d.getMonth()+1}/${d.getDate()}`;
+}
+
+// ============================================================
+// Step 5: Chatwork-like Preview
+// ============================================================
+function renderPreview(app) {
+  const rooms = state.rooms;
+  if (!previewActiveRoom && rooms.length > 0) previewActiveRoom = rooms[0].id;
+  const categories = [...new Set(rooms.map(r => r.category))];
+  const activeRoom = rooms.find(r => r.id === previewActiveRoom);
+  const activeData = activeRoom ? (state.demoData[activeRoom.id] || { messages: [], tasks: [] }) : { messages: [], tasks: [] };
+
+  // Generate fake timestamps working backwards from now
+  const now = new Date();
+  function fakeTime(idx, total) {
+    const baseMinutes = (total - idx) * 7 + Math.floor(Math.random() * 5);
+    const t = new Date(now.getTime() - baseMinutes * 60000);
+    return t.getHours().toString().padStart(2,'0') + ':' + t.getMinutes().toString().padStart(2,'0');
+  }
+
+  // Color for category
+  function catColor(cat) {
+    const colors = ['green','blue','orange','purple','red','gray'];
+    const idx = categories.indexOf(cat);
+    return colors[idx % colors.length];
+  }
+
+  app.innerHTML = `
+    <div class="cw-preview-wrap">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <div>
+          <button class="btn btn-secondary btn-sm" onclick="state.step=4;render()">◂ 戻る</button>
+        </div>
+        <div style="font-size:13px;color:var(--text-light)">Chatwork風プレビュー（実際の画面イメージ）</div>
+        <div>
+          <button class="btn btn-primary btn-sm" onclick="state.step=6;render()">API実行へ ▸</button>
+        </div>
+      </div>
+
+      <div class="cw-container">
+        <!-- Sidebar -->
+        <div class="cw-sidebar">
+          <div class="cw-sidebar-header">
+            <span>Chatwork</span>
+            <span style="font-size:11px;opacity:0.8">${rooms.length} チャット</span>
+          </div>
+          <div class="cw-sidebar-search">
+            <input type="text" placeholder="チャットを検索" disabled>
+          </div>
+          <div class="cw-room-list">
+            ${categories.map(cat => `
+              <div class="cw-room-group-label">${escHtml(cat)}</div>
+              ${rooms.filter(r => r.category === cat).map(r => {
+                const icon = ICON_OPTIONS.find(i => i.id === r.icon);
+                const data = state.demoData[r.id] || { messages: [], tasks: [] };
+                const lastMsg = data.messages.length > 0 ? data.messages[data.messages.length - 1].body.replace(/\[.*?\]/g, '').substring(0, 30) : '';
+                const unread = data.messages.length;
+                return `
+                  <div class="cw-room-entry ${r.id === previewActiveRoom ? 'active' : ''}" onclick="previewActiveRoom='${r.id}';renderPreviewContent()">
+                    <div class="cw-room-entry-icon ${catColor(cat)}">${icon?.emoji || '📁'}</div>
+                    <div class="cw-room-entry-info">
+                      <div class="cw-room-entry-name">${escHtml(r.name)}</div>
+                      <div class="cw-room-entry-last">${escHtml(lastMsg)}</div>
+                    </div>
+                    ${unread > 0 ? `<span class="cw-room-entry-badge">${unread}</span>` : ''}
+                  </div>
+                `;
+              }).join('')}
+            `).join('')}
+          </div>
+        </div>
+
+        <!-- Main chat + tasks -->
+        <div class="cw-main" id="cwMainArea">
+          ${activeRoom ? renderCwChatArea(activeRoom, activeData, fakeTime) : '<div class="cw-empty"><div class="cw-empty-icon">💬</div><div class="cw-empty-text">ルームを選択してください</div></div>'}
+        </div>
+
+        <!-- Task Panel -->
+        <div class="cw-task-panel ${previewShowTasks ? '' : 'hidden'}" id="cwTaskPanel">
+          ${activeRoom ? renderCwTaskPanel(activeRoom, activeData) : ''}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderPreviewContent() {
+  const rooms = state.rooms;
+  const activeRoom = rooms.find(r => r.id === previewActiveRoom);
+  const activeData = activeRoom ? (state.demoData[activeRoom.id] || { messages: [], tasks: [] }) : { messages: [], tasks: [] };
+  const now = new Date();
+  function fakeTime(idx, total) {
+    const baseMinutes = (total - idx) * 7 + Math.floor(Math.random() * 5);
+    const t = new Date(now.getTime() - baseMinutes * 60000);
+    return t.getHours().toString().padStart(2,'0') + ':' + t.getMinutes().toString().padStart(2,'0');
+  }
+
+  // Update active state in sidebar
+  document.querySelectorAll('.cw-room-entry').forEach(el => el.classList.remove('active'));
+  const entries = document.querySelectorAll('.cw-room-entry');
+  const roomIds = state.rooms.map(r => r.id);
+  const activeIdx = roomIds.indexOf(previewActiveRoom);
+  if (entries[activeIdx]) entries[activeIdx].classList.add('active');
+
+  // Update main area
+  if (activeRoom) {
+    document.getElementById('cwMainArea').innerHTML = renderCwChatArea(activeRoom, activeData, fakeTime);
+    document.getElementById('cwTaskPanel').innerHTML = renderCwTaskPanel(activeRoom, activeData);
+    // Scroll to bottom of messages
+    const msgEl = document.querySelector('.cw-messages');
+    if (msgEl) msgEl.scrollTop = msgEl.scrollHeight;
+  }
+}
+
+function renderCwChatArea(room, data, fakeTime) {
+  const icon = ICON_OPTIONS.find(i => i.id === room.icon);
+  const messages = data.messages || [];
+  const tasks = data.tasks || [];
+
+  return `
+    <div class="cw-chat-header">
+      <div>
+        <div class="cw-chat-header-title">${icon?.emoji || '📁'} ${escHtml(room.name)}</div>
+        <div class="cw-chat-header-desc">${escHtml(room.description)}</div>
+      </div>
+      <div class="cw-chat-header-actions">
+        <button onclick="previewShowTasks=!previewShowTasks;document.getElementById('cwTaskPanel').classList.toggle('hidden')" class="${previewShowTasks?'active':''}">タスク ${tasks.length}</button>
+        <button>概要</button>
+      </div>
+    </div>
+
+    <div class="cw-messages">
+      <div class="cw-msg-separator"><span>今日</span></div>
+      ${messages.map((m, i) => {
+        const user = DEMO_USERS[i % DEMO_USERS.length];
+        const time = fakeTime(i, messages.length);
+        return `
+          <div class="cw-msg">
+            <div class="cw-msg-avatar ${user.cls}">${user.initials.charAt(0)}</div>
+            <div class="cw-msg-body">
+              <div class="cw-msg-meta">
+                <span class="cw-msg-name">${user.name}</span>
+                <span class="cw-msg-time">${time}</span>
+              </div>
+              <div class="cw-msg-text">${formatCwPreviewMessage(m.body)}</div>
+            </div>
+          </div>
+        `;
+      }).join('')}
+      ${messages.length === 0 ? '<div class="cw-empty" style="padding:40px 0"><div class="cw-empty-icon">📝</div><div class="cw-empty-text">メッセージはまだありません</div></div>' : ''}
+    </div>
+
+    <div class="cw-input-area">
+      <div class="cw-input-box">
+        <textarea class="cw-input-textarea" placeholder="ここにメッセージを入力..." rows="1" disabled></textarea>
+        <button class="cw-input-send">送信</button>
+      </div>
+      <div class="cw-input-toolbar">
+        <button title="絵文字">😊</button>
+        <button title="TO">@</button>
+        <button title="ファイル">📎</button>
+        <button title="タスク">☑️</button>
+        <button title="引用">"</button>
+      </div>
+    </div>
+  `;
+}
+
+function renderCwTaskPanel(room, data) {
+  const tasks = data.tasks || [];
+  return `
+    <div class="cw-task-header">
+      <span>タスク（${tasks.length}）</span>
+      <span style="font-size:11px;color:#999">未完了</span>
+    </div>
+    <div class="cw-task-list">
+      ${tasks.length === 0 ? '<div style="text-align:center;padding:24px;color:#AAA;font-size:13px">タスクはありません</div>' : ''}
+      ${tasks.map((t, i) => {
+        const user = DEMO_USERS[i % DEMO_USERS.length];
+        const dueDate = t.limit ? formatDate(t.limit) : '';
+        const daysLeft = t.limit ? Math.ceil((t.limit - Date.now()/1000) / 86400) : null;
+        const dueClass = daysLeft !== null && daysLeft <= 3 ? 'soon' : '';
+        return `
+          <div class="cw-task-item">
+            <div class="cw-task-check">
+              <div class="cw-task-checkbox"></div>
+              <div class="cw-task-text">${escHtml(t.body)}</div>
+            </div>
+            <div class="cw-task-meta">
+              <span class="cw-task-assignee">${user.name}</span>
+              ${dueDate ? `<span class="cw-task-due ${dueClass}">${dueDate}まで</span>` : ''}
+            </div>
+          </div>
+        `;
+      }).join('')}
+    </div>
+  `;
+}
+
+function formatCwPreviewMessage(body) {
+  let html = escHtml(body);
+  // [info][title]...[/title]...[/info] → Chatwork-like info block
+  html = html.replace(/\[info\]\[title\](.*?)\[\/title\]([\s\S]*?)\[\/info\]/g,
+    '<div class="cw-info-block"><div class="cw-info-title">$1</div><div class="cw-info-body">$2</div></div>');
+  html = html.replace(/\[info\]([\s\S]*?)\[\/info\]/g,
+    '<div class="cw-info-block"><div class="cw-info-body">$1</div></div>');
+  html = html.replace(/\[code\]([\s\S]*?)\[\/code\]/g,
+    '<pre style="background:#F5F5F5;padding:8px;border-radius:4px;font-size:12px;font-family:monospace;overflow-x:auto;margin:4px 0">$1</pre>');
+  html = html.replace(/\[hr\]/g, '<hr style="border:none;border-top:1px solid #E0E0E0;margin:8px 0">');
+  // Emoticons
+  html = html.replace(/\(smile\)/g, '😊');
+  html = html.replace(/\(bow\)/g, '🙇');
+  html = html.replace(/\(thumbsup\)/g, '👍');
+  html = html.replace(/\(clap\)/g, '👏');
+  html = html.replace(/\(muscle\)/g, '💪');
+  html = html.replace(/\(sports\)/g, '⚽');
+  html = html.replace(/\n/g, '<br>');
+  return html;
+}
+
+// ============================================================
+// Step 6: API Execution
+// ============================================================
+function renderStep6(app) {
+  app.innerHTML = `
+    <div class="card">
+      <h2>Step 6: API実行</h2>
+      <p style="color:var(--text-light);margin-bottom:20px">Chatwork APIを使ってルームの作成とデモデータの投入を行います。</p>
+
+      <div class="api-config">
+        <div class="form-group">
+          <label>Chatwork APIトークン</label>
+          <div style="display:flex;gap:8px">
+            <input type="password" id="apiToken" value="${escHtml(state.apiToken)}" placeholder="APIトークンを入力" oninput="state.apiToken=this.value;localStorage.setItem('cw_api_token',this.value);saveState()">
+            <button class="btn btn-secondary btn-sm" onclick="testConnection()">接続テスト</button>
+          </div>
+          <div style="font-size:11px;color:var(--text-light);margin-top:4px">
+            APIトークンは <a href="https://www.chatwork.com/service/packages/chatwork/subpackages/api/token.php" target="_blank">こちら</a> から取得できます
+          </div>
+        </div>
+
+        <div id="connectionResult"></div>
+
+        <div class="form-group">
+          <label>メンバーのアカウントID <span class="label-hint">（カンマ区切り、管理者権限で追加）</span></label>
+          <input type="text" id="memberIds" placeholder="例：1234567,2345678" value="">
+          <div style="font-size:11px;color:var(--text-light);margin-top:4px">自分のIDは自動で管理者に追加されます</div>
+        </div>
+      </div>
+
+      <div class="summary-bar">
+        <div class="summary-item"><div class="summary-num">${state.rooms.length}</div><div class="summary-label">ルーム作成</div></div>
+        <div class="summary-item"><div class="summary-num">${Object.values(state.demoData).reduce((s,d)=>s+d.messages.length,0)}</div><div class="summary-label">メッセージ投稿</div></div>
+        <div class="summary-item"><div class="summary-num">${Object.values(state.demoData).reduce((s,d)=>s+d.tasks.length,0)}</div><div class="summary-label">タスク作成</div></div>
+      </div>
+
+      <div style="margin-bottom:16px">
+        <button class="btn btn-success" onclick="executeAll()" id="executeBtn" ${!state.apiToken?'disabled':''}>
+          実行開始
+        </button>
+        <button class="btn btn-secondary" onclick="resetExecution()" style="margin-left:8px">リセット</button>
+      </div>
+
+      <div class="progress-bar" id="progressBar" style="display:none">
+        <div class="progress-bar-fill" id="progressFill" style="width:0%"></div>
+      </div>
+      <div id="progressText" style="font-size:12px;color:var(--text-light);margin-bottom:12px"></div>
+
+      <div class="api-log" id="apiLog" style="display:none"></div>
+    </div>
+
+    <div class="nav-bar">
+      <button class="btn btn-secondary" onclick="state.step=5;render()">◂ 戻る</button>
+      <button class="btn btn-secondary" onclick="resetAll()">最初からやり直す</button>
+    </div>
+  `;
+}
+
+async function testConnection() {
+  const token = state.apiToken;
+  if (!token) { alert('APIトークンを入力してください'); return; }
+  const el = document.getElementById('connectionResult');
+  el.innerHTML = '<p style="color:var(--text-light)">接続テスト中...</p>';
+
+  try {
+    const res = await cwApi('GET', '/me', null, token);
+    state.myAccountId = res.account_id;
+    saveState();
+    el.innerHTML = `
+      <div style="padding:12px;background:#E8F5E9;border-radius:var(--radius);margin:8px 0">
+        <strong style="color:#2E7D32">接続成功</strong><br>
+        <span style="font-size:13px">アカウント: ${escHtml(res.name)}（ID: ${res.account_id}）</span>
+      </div>
+    `;
+  } catch (err) {
+    el.innerHTML = `
+      <div style="padding:12px;background:#FFEBEE;border-radius:var(--radius);margin:8px 0">
+        <strong style="color:var(--danger)">接続失敗</strong><br>
+        <span style="font-size:13px">${escHtml(err.message)}</span>
+      </div>
+    `;
+  }
+}
+
+async function cwApi(method, path, body, token) {
+  const url = `https://api.chatwork.com/v2${path}`;
+  const headers = { 'X-ChatWorkToken': token || state.apiToken };
+  const opts = { method, headers };
+  if (body) {
+    headers['Content-Type'] = 'application/x-www-form-urlencoded';
+    opts.body = new URLSearchParams(body).toString();
+  }
+  const res = await fetch(url, opts);
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`API Error ${res.status}: ${text}`);
+  }
+  return res.json();
+}
+
+async function executeAll() {
+  if (!state.apiToken) { alert('APIトークンを入力してください'); return; }
+  if (!state.myAccountId) {
+    try {
+      const me = await cwApi('GET', '/me');
+      state.myAccountId = me.account_id;
+    } catch {
+      alert('接続テストを先に実行してください');
+      return;
+    }
+  }
+
+  const memberInput = document.getElementById('memberIds').value.trim();
+  const additionalMembers = memberInput ? memberInput.split(',').map(s => s.trim()).filter(Boolean) : [];
+  const adminIds = [String(state.myAccountId), ...additionalMembers].join(',');
+
+  const rooms = state.rooms;
+  const totalOps = rooms.length + Object.values(state.demoData).reduce((s, d) => s + d.messages.length + d.tasks.length, 0);
+  let completedOps = 0;
+
+  document.getElementById('executeBtn').disabled = true;
+  document.getElementById('progressBar').style.display = 'block';
+  const logEl = document.getElementById('apiLog');
+  logEl.style.display = 'block';
+  logEl.innerHTML = '';
+
+  function log(msg, type = 'info') {
+    const entry = document.createElement('div');
+    entry.className = `api-log-entry ${type}`;
+    entry.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+    logEl.appendChild(entry);
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  function updateProgress() {
+    completedOps++;
+    const pct = Math.round((completedOps / totalOps) * 100);
+    document.getElementById('progressFill').style.width = pct + '%';
+    document.getElementById('progressText').textContent = `${completedOps} / ${totalOps} (${pct}%)`;
+  }
+
+  log('実行を開始します...');
+
+  for (const room of rooms) {
+    if (state.createdRoomIds[room.id]) {
+      log(`スキップ（作成済み）: ${room.name}`, 'info');
+      updateProgress();
+      continue;
+    }
+
+    try {
+      log(`ルーム作成中: ${room.name}`);
+      const params = {
+        name: room.name,
+        description: room.description || '',
+        icon_preset: room.icon || 'group',
+        members_admin_ids: adminIds,
+      };
+      const result = await cwApi('POST', '/rooms', params);
+      const roomId = result.room_id;
+      state.createdRoomIds[room.id] = roomId;
+      saveState();
+      log(`ルーム作成完了: ${room.name} (ID: ${roomId})`, 'success');
+      updateProgress();
+
+      // Post messages
+      const data = state.demoData[room.id] || { messages: [], tasks: [] };
+      for (const msg of data.messages) {
+        try {
+          await cwApi('POST', `/rooms/${roomId}/messages`, { body: msg.body });
+          log(`  メッセージ投稿: ${room.name}`, 'success');
+        } catch (err) {
+          log(`  メッセージ投稿失敗: ${err.message}`, 'error');
+        }
+        updateProgress();
+        await sleep(350); // rate limit
+      }
+
+      // Create tasks
+      for (const task of data.tasks) {
+        try {
+          const taskParams = {
+            body: task.body,
+            to_ids: String(state.myAccountId),
+          };
+          if (task.limit) {
+            taskParams.limit = task.limit;
+            taskParams.limit_type = task.limitType || 'date';
+          }
+          await cwApi('POST', `/rooms/${roomId}/tasks`, taskParams);
+          log(`  タスク作成: ${task.body}`, 'success');
+        } catch (err) {
+          log(`  タスク作成失敗: ${err.message}`, 'error');
+        }
+        updateProgress();
+        await sleep(350);
+      }
+
+    } catch (err) {
+      log(`ルーム作成失敗: ${room.name} - ${err.message}`, 'error');
+      updateProgress();
+    }
+
+    await sleep(300);
+  }
+
+  log('全ての処理が完了しました！', 'success');
+  document.getElementById('executeBtn').disabled = false;
+}
+
+function resetExecution() {
+  state.createdRoomIds = {};
+  saveState();
+  render();
+}
+
+function resetAll() {
+  if (!confirm('全ての設定をリセットしますか？')) return;
+  state = {
+    step: 1,
+    hearing: { industry: '', businessType: '', companySize: '', departments: [], useCases: [] },
+    rooms: [],
+    demoData: {},
+    apiToken: state.apiToken,
+    myAccountId: state.myAccountId,
+    createdRoomIds: {},
+  };
+  render();
+}
+
+// ============================================================
+// Utilities
+// ============================================================
+function escHtml(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+function sleep(ms) {
+  return new Promise(r => setTimeout(r, ms));
+}
+
+// ============================================================
+// Init
+// ============================================================
+render();
+</script>
+</body>
+</html>
