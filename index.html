@@ -182,6 +182,9 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--p
 /* Export/Import */
 .toolbar { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
 
+/* AI badge */
+.ai-badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; background: linear-gradient(135deg,#f3e8ff,#ede9fe); color: #6d28d9; border-radius: 10px; font-size: 10px; font-weight: 600; border: 1px solid #c4b5fd; }
+
 /* ============================================================
    Chatwork-like Preview UI
    ============================================================ */
@@ -360,6 +363,7 @@ let state = loadState() || {
   rooms: [],
   demoData: {},
   apiToken: localStorage.getItem('cw_api_token') || '',
+  claudeApiKey: localStorage.getItem('cw_claude_api_key') || '',
   myAccountId: null,
   createdRoomIds: {},
 };
@@ -452,9 +456,24 @@ function renderStep1(app) {
       </div>
     </div>
 
+      <div class="card" style="background:linear-gradient(135deg,#f8f0ff,#f0f4ff);border-color:#c4b5fd">
+        <h3 style="color:#6d28d9;margin-bottom:8px">AI最適化（任意）</h3>
+        <p style="color:var(--text-light);font-size:13px;margin-bottom:12px">Gemini APIキーを設定すると、ヒアリング内容に基づいてAIがルーム設計を最適化し、業種に特化したデモメッセージを自動生成します。</p>
+        <div class="form-group" style="margin-bottom:0">
+          <div style="display:flex;gap:8px">
+            <input type="password" id="claudeApiKey" value="${escHtml(state.claudeApiKey)}" placeholder="AIza..." oninput="state.claudeApiKey=this.value;localStorage.setItem('cw_claude_api_key',this.value);saveState()" style="flex:1">
+          </div>
+          <div style="font-size:11px;color:var(--text-light);margin-top:4px">未設定でもテンプレートベースで動作します</div>
+        </div>
+      </div>
+    </div>
+
     <div class="nav-bar">
       <div class="nav-info">業種と従業員数は必須です</div>
-      <button class="btn btn-primary" onclick="goToStep2()" ${!h.industry||!h.companySize?'disabled':''}>次へ：ルーム設計 ▸</button>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-primary" onclick="goToStep2()" ${!h.industry||!h.companySize?'disabled':''}>テンプレートで設計 ▸</button>
+        <button class="btn btn-primary" onclick="goToStep2WithAI()" ${!h.industry||!h.companySize||!state.claudeApiKey?'disabled':''} style="background:#6d28d9">AIで最適化 ▸</button>
+      </div>
     </div>
   `;
 
@@ -546,6 +565,287 @@ function goToStep2() {
   state.demoData = generateDemoData(state.rooms);
   state.step = 2;
   render();
+}
+
+// ============================================================
+// Claude API Integration
+// ============================================================
+
+async function callLLM(systemPrompt, userPrompt) {
+  const apiKey = state.claudeApiKey;
+  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      system_instruction: { parts: [{ text: systemPrompt }] },
+      contents: [{ parts: [{ text: userPrompt }] }],
+      generationConfig: { temperature: 0.7, maxOutputTokens: 8000 },
+    }),
+  });
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Gemini API Error ${res.status}: ${err}`);
+  }
+  const data = await res.json();
+  return data.candidates[0].content.parts[0].text;
+}
+
+function showLoadingOverlay(message) {
+  const overlay = document.createElement('div');
+  overlay.id = 'aiLoadingOverlay';
+  overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(109,40,217,0.15);z-index:999;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(2px)';
+  overlay.innerHTML = `
+    <div style="background:white;padding:32px 48px;border-radius:12px;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,0.15)">
+      <div style="font-size:32px;margin-bottom:12px;animation:spin 2s linear infinite">🤖</div>
+      <div style="font-size:16px;font-weight:600;color:#6d28d9;margin-bottom:8px">AI最適化中...</div>
+      <div style="font-size:13px;color:#888" id="aiLoadingMsg">${message}</div>
+    </div>
+    <style>@keyframes spin{0%{transform:rotate(0)}100%{transform:rotate(360deg)}}</style>
+  `;
+  document.body.appendChild(overlay);
+}
+
+function updateLoadingMessage(msg) {
+  const el = document.getElementById('aiLoadingMsg');
+  if (el) el.textContent = msg;
+}
+
+function hideLoadingOverlay() {
+  const el = document.getElementById('aiLoadingOverlay');
+  if (el) el.remove();
+}
+
+async function goToStep2WithAI() {
+  const h = state.hearing;
+  const template = INDUSTRY_TEMPLATES[h.industry];
+  if (!template) return goToStep2();
+
+  showLoadingOverlay('ヒアリング内容を分析してルーム構成を最適化しています...');
+
+  try {
+    // まずテンプレートベースで生成（フォールバック用）
+    const baseRooms = generateRooms(h);
+
+    const systemPrompt = `あなたはChatwork（ビジネスチャットツール）のルーム設計の専門家です。
+企業のヒアリング情報に基づいて、最適なChatworkのグループチャット（ルーム）構成を提案してください。
+
+回答は必ず以下のJSON形式のみで返してください。説明文は不要です。
+\`\`\`json
+[
+  {
+    "name": "【カテゴリ】ルーム名",
+    "icon": "group",
+    "description": "このルームの用途",
+    "category": "カテゴリ名"
+  }
+]
+\`\`\`
+
+使用可能なicon値: group, check, document, meeting, event, project, business, study, security, star, idea, heart, magicwand, beer, music, sports, travel
+
+ルーム命名ルール:
+- 全社系: 【全社】連絡、【全社】雑談
+- 部門系: 【部門名】
+- プロジェクト/案件系: 【PJ】名前、【案件】名前、【顧問先】名前、【現場】名前
+- 横断系: 【共有】名前、【連携】名前
+- 外部: 【外部】名前
+
+業種に応じた専門的なルーム名にしてください（例：建設なら「現場」、士業なら「顧問先」、医療なら「病棟」など）。`;
+
+    const userPrompt = `以下の企業情報に基づいて、Chatworkのルーム構成を提案してください。
+
+業種: ${template.label}（${template.subtitle}）
+事業内容: ${h.businessType || '未入力'}
+従業員数: ${SIZE_SCALE[h.companySize]?.label || '不明'}
+部署構成: ${h.departments.join('、')}
+主な用途: ${h.useCases.join('、')}
+
+テンプレートのベース構成（参考）:
+${baseRooms.map(r => `- ${r.name}（${r.category}）: ${r.description}`).join('\n')}
+
+このベースを参考にしつつ、この企業の特性に合わせて最適化してください。
+- 事業内容に合った具体的なルーム名にする（例：「案件A社」を具体的な社名風にする）
+- 部署構成に合ったルームを過不足なく設計する
+- 規模感に合ったルーム数にする（${SIZE_SCALE[h.companySize]?.label}規模）
+- 業種特有のルームを追加する
+
+${SIZE_SCALE[h.companySize]?.maxRooms || 15}ルーム程度で提案してください。`;
+
+    const response = await callLLM(systemPrompt, userPrompt);
+
+    // JSONを抽出
+    let jsonStr = response;
+    const jsonMatch = response.match(/```json\s*([\s\S]*?)\s*```/) || response.match(/\[[\s\S]*\]/);
+    if (jsonMatch) jsonStr = jsonMatch[1] || jsonMatch[0];
+
+    const aiRooms = JSON.parse(jsonStr);
+    let order = 0;
+    state.rooms = aiRooms.map(r => ({
+      id: `room_${order++}`,
+      name: r.name,
+      icon: r.icon || 'group',
+      description: r.description || '',
+      category: r.category || '全社',
+      archetype: guessArchetype(r.name, r.description, r.category),
+    }));
+
+    state.demoData = generateDemoData(state.rooms);
+    state.step = 2;
+    hideLoadingOverlay();
+    render();
+  } catch (err) {
+    hideLoadingOverlay();
+    alert(`AI最適化に失敗しました。テンプレートベースで進めます。\n\nエラー: ${err.message}`);
+    goToStep2();
+  }
+}
+
+// ルーム名・説明からarchetypeを推測する
+function guessArchetype(name, desc, category) {
+  const text = (name + ' ' + desc + ' ' + category).toLowerCase();
+  const map = [
+    [/雑談|つぶやき|フリー|交流/, 'casual'],
+    [/日報|週報|報告/, 'daily_report'],
+    [/経営|役員|幹部/, 'management'],
+    [/総務|経理|事務|請求|勤怠/, 'admin_general'],
+    [/全社|全体|連絡|お知らせ/, 'company_announce'],
+    [/シフト|勤務/, 'shift'],
+    [/申し送り|引き継ぎ|引継/, 'handover'],
+    [/安全|衛生|ヒヤリ/, 'safety'],
+    [/品質|検査|クレーム対応/, 'quality'],
+    [/在庫|発注|仕入/, 'inventory'],
+    [/売上|レポート/, 'sales_report'],
+    [/現場|工事|施工/, 'construction_site'],
+    [/案件|提案|商談/, 'project_deal'],
+    [/顧問先|クライアント|顧客別/, 'client_project'],
+    [/期日|申告|届出|スケジュール管理/, 'deadline_mgmt'],
+    [/法改正|通達|制度/, 'legal_update'],
+    [/インシデント|事故|ヒヤリハット/, 'incident'],
+    [/委員会|感染|対策/, 'committee'],
+    [/研修|勉強会|カンファ/, 'study_session'],
+    [/物件|不動産/, 'property_info'],
+    [/内見/, 'viewing_report'],
+    [/契約|決済/, 'contract_mgmt'],
+    [/オーナー/, 'owner_support'],
+    [/求人|採用|ポジション/, 'job_posting'],
+    [/マッチング/, 'matching'],
+    [/フォロー|派遣スタッフ/, 'staff_follow'],
+    [/成約|受注報告/, 'wins'],
+    [/イベント|行事/, 'event_planning'],
+    [/受注|注文/, 'order_mgmt'],
+    [/製造|生産|加工/, 'production'],
+    [/連携|横断/, 'cross_function'],
+    [/外部|協力|パートナー|業者/, 'external_partner'],
+    [/ナレッジ|共有|事例|情報/, 'knowledge'],
+    [/pj|プロジェクト/, 'project_internal'],
+    [/デザイン|制作|クリエイティブ/, 'creative_project'],
+    [/レセプト|請求.*医|診療/, 'admin_billing'],
+    [/店舗|営業報告/, 'store_ops'],
+    [/クレーム|cs|改善/, 'customer_issue'],
+  ];
+  for (const [re, archetype] of map) {
+    if (re.test(text)) return archetype;
+  }
+  return 'department';
+}
+
+// AI でデモメッセージを動的生成
+async function generateDemoWithAI() {
+  if (!state.claudeApiKey) { alert('Claude APIキーを設定してください'); return; }
+
+  const h = state.hearing;
+  const template = INDUSTRY_TEMPLATES[h.industry];
+  showLoadingOverlay('業種に特化したデモメッセージを生成しています...');
+
+  try {
+    // ルームを5件ずつバッチ処理（API負荷軽減）
+    const rooms = state.rooms;
+    const batchSize = 5;
+
+    for (let i = 0; i < rooms.length; i += batchSize) {
+      const batch = rooms.slice(i, i + batchSize);
+      updateLoadingMessage(`デモデータ生成中... (${Math.min(i + batchSize, rooms.length)}/${rooms.length} ルーム)`);
+
+      const systemPrompt = `あなたはChatwork（ビジネスチャットツール）のデモデータ作成の専門家です。
+指定されたルームに投稿されるリアルなメッセージとタスクを生成してください。
+
+回答は必ず以下のJSON形式のみで返してください。
+\`\`\`json
+{
+  "room_id": {
+    "messages": [
+      { "body": "メッセージ本文" }
+    ],
+    "tasks": [
+      { "body": "タスク内容", "limitDays": 5, "limitType": "date" }
+    ]
+  }
+}
+\`\`\`
+
+メッセージのルール:
+- Chatwork記法を使用: [info][title]タイトル[/title]本文[/info]
+- 顔文字: (smile) (thumbsup) (bow) (clap)
+- 1ルームあたり12-18件のメッセージ
+- タスクは3-6件
+- 複数人の会話（リアクション、質問、回答の往復）
+- 業種に即した専門用語・数値を含める
+- limitTypeは "date" または "time"`;
+
+      const userPrompt = `以下の企業のChatworkルームにふさわしいデモメッセージを生成してください。
+
+企業情報:
+- 業種: ${template?.label || h.industry}
+- 事業内容: ${h.businessType || '一般的な' + (template?.label || '')}
+- 規模: ${SIZE_SCALE[h.companySize]?.label || '中小企業'}
+
+対象ルーム:
+${batch.map(r => `- ID: "${r.id}" / 名前: "${r.name}" / 説明: "${r.description}" / カテゴリ: "${r.category}"`).join('\n')}
+
+各ルームに12-18件のリアルなメッセージと3-6件のタスクを生成してください。
+実際の業務で交わされるような具体的な会話にしてください。`;
+
+      const response = await callLLM(systemPrompt, userPrompt);
+
+      // JSONを抽出
+      let jsonStr = response;
+      const jsonMatch = response.match(/```json\s*([\s\S]*?)\s*```/) || response.match(/\{[\s\S]*\}/);
+      if (jsonMatch) jsonStr = jsonMatch[1] || jsonMatch[0];
+
+      try {
+        const aiData = JSON.parse(jsonStr);
+        for (const room of batch) {
+          if (aiData[room.id]) {
+            state.demoData[room.id] = {
+              messages: (aiData[room.id].messages || []).map(m => ({ body: m.body })),
+              tasks: (aiData[room.id].tasks || []).map(t => ({
+                body: t.body,
+                limitDays: t.limitDays,
+                limitType: t.limitType || 'date',
+                limit: t.limitDays !== undefined ? Math.floor(Date.now() / 1000) + t.limitDays * 86400 : undefined,
+              })),
+            };
+          }
+        }
+      } catch (parseErr) {
+        console.warn('AI response parse error for batch:', parseErr);
+        // パース失敗したルームはテンプレートデータのまま
+      }
+
+      // レート制限対策
+      if (i + batchSize < rooms.length) await sleep(1000);
+    }
+
+    saveState();
+    state.step = 4;
+    hideLoadingOverlay();
+    render();
+  } catch (err) {
+    hideLoadingOverlay();
+    alert(`AIデモデータ生成に失敗しました。テンプレートデータで進めます。\n\nエラー: ${err.message}`);
+    state.step = 4;
+    render();
+  }
 }
 
 // ============================================================
@@ -670,7 +970,10 @@ function renderStep3(app) {
 
     <div class="nav-bar">
       <button class="btn btn-secondary" onclick="state.step=2;render()">◂ 戻る</button>
-      <button class="btn btn-primary" onclick="state.step=4;render()">次へ：デモデータ確認 ▸</button>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-primary" onclick="state.step=4;render()">テンプレートデータで進む ▸</button>
+        <button class="btn btn-primary" onclick="generateDemoWithAI()" ${!state.claudeApiKey?'disabled':''} style="background:#6d28d9">AIでデモ生成 ▸</button>
+      </div>
     </div>
   `;
 }
