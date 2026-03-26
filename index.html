@@ -309,6 +309,7 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--p
     <h1>Chatwork ルーム設計デモツール</h1>
     <div class="header-sub">業種・規模に合わせたルーム設計とデモデータの投入</div>
   </div>
+  <button onclick="resetAll()" style="background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);color:white;padding:6px 14px;border-radius:6px;font-size:12px;cursor:pointer;font-family:inherit">リセット</button>
 </div>
 
 <div class="steps" id="stepIndicator"></div>
@@ -1822,16 +1823,19 @@ function resetExecution() {
 }
 
 function resetAll() {
-  if (!confirm('全ての設定をリセットしますか？')) return;
+  if (!confirm('全ての設定をリセットして初期画面に戻りますか？')) return;
   state = {
     step: 1,
-    hearing: { industry: '', businessType: '', companySize: '', departments: [], useCases: [] },
+    hearing: { industry: '', businessType: '', companySize: '', departments: [], useCases: [], freeText: '' },
     rooms: [],
     demoData: {},
     apiToken: state.apiToken,
+    claudeApiKey: state.claudeApiKey,
+    aiQuestions: [],
     myAccountId: state.myAccountId,
     createdRoomIds: {},
   };
+  localStorage.removeItem('cw_demo_state');
   render();
 }
 
