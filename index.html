@@ -461,7 +461,10 @@ function renderStep1(app) {
         <div class="tag-input-wrap">
           <input type="text" id="deptInput" placeholder="部署名を入力してEnter" onkeydown="if(event.key==='Enter'){event.preventDefault();addDept()}">
           <button class="btn btn-secondary btn-sm" onclick="addDept()">追加</button>
+          <button class="btn btn-sm" onclick="document.getElementById('deptFile').click()" style="background:#6d28d9;color:white;white-space:nowrap">📎 ファイルから抽出</button>
+          <input type="file" id="deptFile" accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.csv,.txt,.xlsx,.xls" style="display:none" onchange="extractDeptsFromFile(event)">
         </div>
+        <div id="deptFileStatus" style="font-size:12px;color:#6d28d9;margin-top:4px;display:none"></div>
         <div class="suggested-tags" id="suggestedDepts"></div>
       </div>
 
@@ -562,6 +565,97 @@ function addDept() {
     renderDeptTags();
     saveState();
   }
+}
+
+async function extractDeptsFromFile(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  event.target.value = '';
+
+  const statusEl = document.getElementById('deptFileStatus');
+  statusEl.style.display = 'block';
+  statusEl.textContent = `「${file.name}」を解析中...`;
+
+  try {
+    const isImage = file.type.startsWith('image/');
+    const isPDF = file.type === 'application/pdf';
+    const isText = file.type.startsWith('text/') || file.name.endsWith('.csv') || file.name.endsWith('.txt');
+
+    let parts = [];
+
+    if (isImage || isPDF) {
+      // 画像・PDFはbase64でGeminiに送信（マルチモーダル）
+      const base64 = await fileToBase64(file);
+      const mimeType = file.type || (isPDF ? 'application/pdf' : 'image/png');
+      parts = [
+        { text: '以下のファイルから、部署名・チーム名・部門名を全て抽出してください。組織図、名刺、会社概要などの資料から読み取ってください。\n\n必ず以下のJSON形式のみで返してください。説明文は不要です。\n```json\n["部署名1", "部署名2", "部署名3"]\n```' },
+        { inline_data: { mime_type: mimeType, data: base64 } }
+      ];
+    } else if (isText) {
+      // テキスト・CSVはそのまま送信
+      const text = await file.text();
+      parts = [
+        { text: `以下のテキストデータから、部署名・チーム名・部門名を全て抽出してください。\n\n必ず以下のJSON形式のみで返してください。説明文は不要です。\n\`\`\`json\n["部署名1", "部署名2", "部署名3"]\n\`\`\`\n\nデータ:\n${text.substring(0, 5000)}` }
+      ];
+    } else {
+      // Excel等はテキスト抽出を試みる
+      const text = await file.text().catch(() => '');
+      if (!text) {
+        statusEl.textContent = 'このファイル形式は対応していません。画像・PDF・CSV・テキストファイルをお使いください。';
+        return;
+      }
+      parts = [
+        { text: `以下のデータから部署名・チーム名を抽出してください。JSON配列で返してください。\n\`\`\`json\n["部署名1", "部署名2"]\n\`\`\`\n\nデータ:\n${text.substring(0, 5000)}` }
+      ];
+    }
+
+    const res = await fetch(LLM_PROXY_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts }],
+        generationConfig: { temperature: 0.2, maxOutputTokens: 1000 },
+      }),
+    });
+
+    if (!res.ok) throw new Error(`API Error ${res.status}`);
+    const data = await res.json();
+    const responseText = data.candidates[0].content.parts[0].text;
+
+    // JSON抽出
+    let jsonStr = responseText;
+    const jsonMatch = responseText.match(/```json\s*([\s\S]*?)\s*```/) || responseText.match(/\[[\s\S]*?\]/);
+    if (jsonMatch) jsonStr = jsonMatch[1] || jsonMatch[0];
+
+    const depts = JSON.parse(jsonStr);
+    let added = 0;
+    for (const dept of depts) {
+      const d = String(dept).trim();
+      if (d && !state.hearing.departments.includes(d)) {
+        state.hearing.departments.push(d);
+        added++;
+      }
+    }
+
+    statusEl.textContent = `${file.name} から ${depts.length} 件の部署を検出（${added} 件追加）`;
+    renderDeptTags();
+    saveState();
+  } catch (err) {
+    console.error('Dept extraction failed:', err);
+    statusEl.textContent = `解析に失敗しました: ${err.message}`;
+  }
+}
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const base64 = reader.result.split(',')[1];
+      resolve(base64);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 }
 
 function removeDept(dept) {
