@@ -1580,6 +1580,19 @@ function formatCwPreviewMessage(body) {
   html = html.replace(/\[code\]([\s\S]*?)\[\/code\]/g,
     '<pre style="background:#F5F5F5;padding:8px;border-radius:4px;font-size:12px;font-family:monospace;overflow-x:auto;margin:4px 0">$1</pre>');
   html = html.replace(/\[hr\]/g, '<hr style="border:none;border-top:1px solid #E0E0E0;margin:8px 0">');
+  // File attachments [file]name.ext[/file]
+  html = html.replace(/\[file\](.*?)\[\/file\]/g, (_, fname) => {
+    const ext = fname.split('.').pop().toLowerCase();
+    const icons = { pdf:'📕', xlsx:'📊', xls:'📊', doc:'📝', docx:'📝', ppt:'📙', pptx:'📙', csv:'📋', zip:'📦', png:'🖼️', jpg:'🖼️', jpeg:'🖼️', gif:'🖼️' };
+    const icon = icons[ext] || '📎';
+    return `<div style="display:inline-flex;align-items:center;gap:8px;padding:8px 14px;background:#F0F4F8;border:1px solid #D0D8E0;border-radius:6px;margin:4px 0;font-size:13px;cursor:pointer"><span style="font-size:20px">${icon}</span><div><div style="font-weight:600;color:#2563EB">${fname}</div><div style="font-size:11px;color:#888">クリックでダウンロード</div></div></div>`;
+  });
+  // Image preview [preview]description[/preview]
+  html = html.replace(/\[preview\](.*?)\[\/preview\]/g, (_, desc) => {
+    const colors = ['#C5CAE9','#B2DFDB','#FFCDD2','#FFE0B2','#D1C4E9','#B3E5FC'];
+    const color = colors[Math.floor(Math.random()*colors.length)];
+    return `<div style="display:inline-block;width:180px;height:120px;background:${color};border-radius:8px;margin:4px 4px 4px 0;position:relative;overflow:hidden"><div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,0.5);color:white;padding:4px 8px;font-size:10px">${desc}</div></div>`;
+  });
   // Emoticons
   html = html.replace(/\(smile\)/g, '😊');
   html = html.replace(/\(bow\)/g, '🙇');
@@ -1587,6 +1600,7 @@ function formatCwPreviewMessage(body) {
   html = html.replace(/\(clap\)/g, '👏');
   html = html.replace(/\(muscle\)/g, '💪');
   html = html.replace(/\(sports\)/g, '⚽');
+  html = html.replace(/\(beer\)/g, '🍺');
   html = html.replace(/\n/g, '<br>');
   return html;
 }
