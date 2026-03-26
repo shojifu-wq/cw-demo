@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>Chatwork ルーム設計デモツール</title>
 <style>
 :root {
@@ -182,6 +185,11 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--p
 /* Export/Import */
 .toolbar { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
 
+/* AI hearing options */
+.hearing-opt { padding: 8px 14px; border: 2px solid #e0d4f5; border-radius: 8px; cursor: pointer; font-size: 13px; transition: all 0.15s; background: white; text-align: left; font-family: inherit; }
+.hearing-opt:hover { border-color: #6d28d9; background: #faf5ff; }
+.hearing-opt.selected { border-color: #6d28d9; background: #f3e8ff; font-weight: 600; }
+
 /* AI badge */
 .ai-badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; background: linear-gradient(135deg,#f3e8ff,#ede9fe); color: #6d28d9; border-radius: 10px; font-size: 10px; font-weight: 600; border: 1px solid #c4b5fd; }
 
@@ -323,6 +331,18 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--p
   <div class="modal" id="modalContent"></div>
 </div>
 
+<script>
+// Cache busting: append timestamp to script URLs
+function loadScript(src) {
+  return new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = src + '?v=' + Date.now();
+    s.onload = resolve;
+    s.onerror = reject;
+    document.head.appendChild(s);
+  });
+}
+</script>
 <script src="templates.js"></script>
 <script src="demo-messages.js"></script>
 <script>
@@ -365,6 +385,7 @@ let state = loadState() || {
   demoData: {},
   apiToken: localStorage.getItem('cw_api_token') || '',
   claudeApiKey: localStorage.getItem('cw_claude_api_key') || '',
+  aiQuestions: [], // [{question, type:'single'|'multi', options:[], answers:[]}]
   myAccountId: null,
   createdRoomIds: {},
 };
@@ -456,12 +477,31 @@ function renderStep1(app) {
         </div>
       </div>
 
-      <div class="form-group">
-        <label>その他リクエスト・補足情報 <span class="label-hint">（自由記述・AIに反映されます）</span></label>
-        <textarea id="freeText" rows="3" placeholder="例：顧客対応は電話とFAXが中心で、それをチャットに置き換えたい。現場が5箇所あり、写真共有を頻繁に行う。社外の協力会社3社とも連携したい。など" oninput="state.hearing.freeText=this.value;saveState()">${escHtml(h.freeText||'')}</textarea>
-      </div>
     </div>
 
+    ${h.industry && h.companySize ? `
+    <div class="card" style="border-color:#c4b5fd;border-style:dashed" id="aiQuestionsCard">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <h3 style="color:#6d28d9;margin-bottom:0">AI深掘りヒアリング <span style="font-size:12px;font-weight:400;color:var(--text-light)">（任意・精度向上）</span></h3>
+        <div>
+          ${(state.aiQuestions||[]).length === 0
+            ? `<button class="btn btn-sm" onclick="generateAIQuestions()" style="background:#6d28d9;color:white">質問を生成</button>`
+            : `<button class="btn btn-sm btn-secondary" onclick="generateAIQuestions()">再生成</button>`
+          }
+        </div>
+      </div>
+      <p style="font-size:13px;color:var(--text-light);margin-bottom:16px">「質問を生成」を押すと、選択した業種に特化した追加質問がAIにより生成されます。回答するほどルーム設計の精度が上がります。</p>
+      <div id="aiQuestionsArea">
+        ${renderAIQuestions()}
+      </div>
+    </div>
+    ` : ''}
+
+    <div class="card">
+      <div class="form-group" style="margin-bottom:0">
+        <label>その他リクエスト・補足情報 <span class="label-hint">（自由記述）</span></label>
+        <textarea id="freeText" rows="3" placeholder="例：顧客対応は電話とFAXが中心で、それをチャットに置き換えたい。現場が5箇所あり、写真共有を頻繁に行う。社外の協力会社3社とも連携したい。など" oninput="state.hearing.freeText=this.value;saveState()">${escHtml(h.freeText||'')}</textarea>
+      </div>
     </div>
 
     <div class="nav-bar">
@@ -554,6 +594,116 @@ function toggleUseCase(uc) {
   if (idx >= 0) state.hearing.useCases.splice(idx, 1);
   else state.hearing.useCases.push(uc);
   render();
+}
+
+// ============================================================
+// AI Deep-dive Questions
+// ============================================================
+function renderAIQuestions() {
+  const qs = state.aiQuestions || [];
+  if (qs.length === 0) return '';
+  return qs.map((q, qi) => `
+    <div class="form-group" style="padding:14px;background:#faf8ff;border:1px solid #ede9fe;border-radius:8px;margin-bottom:12px">
+      <label style="color:#6d28d9">${escHtml(q.question)} <span class="label-hint">${q.type === 'multi' ? '（複数選択可）' : '（1つ選択）'}</span></label>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">
+        ${q.options.map((opt, oi) => {
+          const selected = (q.answers || []).includes(opt);
+          return `<button class="hearing-opt ${selected ? 'selected' : ''}" style="display:inline-block;width:auto" onclick="toggleAIAnswer(${qi},${oi})">${escHtml(opt)}</button>`;
+        }).join('')}
+      </div>
+    </div>
+  `).join('');
+}
+
+function toggleAIAnswer(qi, oi) {
+  const q = state.aiQuestions[qi];
+  if (!q) return;
+  const opt = q.options[oi];
+  if (!q.answers) q.answers = [];
+
+  if (q.type === 'multi') {
+    const idx = q.answers.indexOf(opt);
+    if (idx >= 0) q.answers.splice(idx, 1);
+    else q.answers.push(opt);
+  } else {
+    q.answers = q.answers[0] === opt ? [] : [opt];
+  }
+  saveState();
+
+  // UIだけ更新（全体再レンダリングしない）
+  const area = document.getElementById('aiQuestionsArea');
+  if (area) area.innerHTML = renderAIQuestions();
+}
+
+async function generateAIQuestions() {
+  const h = state.hearing;
+  const tmpl = INDUSTRY_TEMPLATES[h.industry];
+  if (!tmpl) return;
+
+  const btn = event.target;
+  btn.disabled = true;
+  btn.textContent = '生成中...';
+
+  try {
+    const systemPrompt = `あなたはChatwork（ビジネスチャット）の導入コンサルタントです。
+企業のヒアリング情報に基づいて、Chatworkのルーム設計に必要な追加質問を生成してください。
+
+必ず以下のJSON形式のみで返してください。説明文は不要です。
+\`\`\`json
+[
+  {
+    "question": "質問文",
+    "type": "multi",
+    "options": ["選択肢1", "選択肢2", "選択肢3", "選択肢4", "選択肢5"]
+  }
+]
+\`\`\`
+
+ルール:
+- 5〜8問生成する
+- typeは "multi"（複数選択可）か "single"（1つだけ選択）
+- 選択肢は3〜6個
+- 業種に特化した具体的な質問にする
+- 以下の観点をカバーする:
+  1. 社内コミュニケーションの現状と課題
+  2. 社外（顧客・取引先・協力会社）との連携状況
+  3. 情報共有で困っていること
+  4. 現在使っているツール
+  5. チャットで特にやりたいこと
+  6. 業種特有の業務フロー（例：建設なら現場管理、士業なら顧問先対応）
+  7. セキュリティやコンプライアンスの懸念`;
+
+    const userPrompt = `以下の企業情報に基づいて追加ヒアリング質問を生成してください。
+
+業種: ${tmpl.label}（${tmpl.subtitle}）
+事業内容: ${h.businessType || '未入力'}
+従業員数: ${SIZE_SCALE[h.companySize]?.label || '不明'}
+部署構成: ${h.departments.join('、') || '未入力'}
+主な用途: ${h.useCases.join('、') || '未選択'}
+
+この業種・規模の企業が Chatwork を導入する際に、最適なルーム設計をするために必要な情報を聞き出す質問を作ってください。`;
+
+    const response = await callLLM(systemPrompt, userPrompt);
+
+    let jsonStr = response;
+    const jsonMatch = response.match(/```json\s*([\s\S]*?)\s*```/) || response.match(/\[[\s\S]*\]/);
+    if (jsonMatch) jsonStr = jsonMatch[1] || jsonMatch[0];
+
+    const parsed = JSON.parse(jsonStr);
+    state.aiQuestions = parsed.map(q => ({
+      question: q.question,
+      type: q.type || 'multi',
+      options: q.options || [],
+      answers: [],
+    }));
+    saveState();
+    render();
+  } catch (err) {
+    console.error('AI question generation failed:', err);
+    alert('質問の生成に失敗しました: ' + err.message);
+    btn.disabled = false;
+    btn.textContent = '質問を生成';
+  }
 }
 
 function goToStep2() {
@@ -657,6 +807,7 @@ async function goToStep2WithAI() {
 部署構成: ${h.departments.join('、')}
 主な用途: ${h.useCases.join('、')}
 ${h.freeText ? `\nお客様からのリクエスト・補足情報:\n${h.freeText}` : ''}
+${(state.aiQuestions||[]).filter(q=>(q.answers||[]).length>0).length > 0 ? `\n詳細ヒアリング回答:\n${state.aiQuestions.filter(q=>(q.answers||[]).length>0).map(q=>`Q: ${q.question}\nA: ${q.answers.join('、')}`).join('\n\n')}` : ''}
 
 テンプレートのベース構成（参考）:
 ${baseRooms.map(r => `- ${r.name}（${r.category}）: ${r.description}`).join('\n')}
