@@ -185,28 +185,6 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--p
 /* AI badge */
 .ai-badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; background: linear-gradient(135deg,#f3e8ff,#ede9fe); color: #6d28d9; border-radius: 10px; font-size: 10px; font-weight: 600; border: 1px solid #c4b5fd; }
 
-/* AI Hearing Chat */
-.hearing-chat { display: flex; flex-direction: column; gap: 16px; }
-.hearing-bubble { max-width: 85%; padding: 14px 18px; border-radius: 12px; font-size: 14px; line-height: 1.7; animation: fadeIn 0.3s ease; }
-@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-.hearing-bubble.ai { background: linear-gradient(135deg,#f3e8ff,#ede9fe); border: 1px solid #c4b5fd; align-self: flex-start; border-bottom-left-radius: 4px; }
-.hearing-bubble.ai .bubble-label { font-size: 11px; font-weight: 700; color: #6d28d9; margin-bottom: 6px; }
-.hearing-bubble.user { background: var(--primary-light); border: 1px solid #b3d4f0; align-self: flex-end; border-bottom-right-radius: 4px; }
-.hearing-options { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
-.hearing-opt { padding: 10px 16px; border: 2px solid #e0d4f5; border-radius: 8px; cursor: pointer; font-size: 13px; transition: all 0.15s; background: white; text-align: left; font-family: inherit; }
-.hearing-opt:hover { border-color: #6d28d9; background: #faf5ff; }
-.hearing-opt.selected { border-color: #6d28d9; background: #f3e8ff; font-weight: 600; }
-.hearing-thinking { display: flex; align-items: center; gap: 8px; padding: 12px 18px; color: #6d28d9; font-size: 13px; }
-.hearing-thinking .dots { display: inline-flex; gap: 4px; }
-.hearing-thinking .dots span { width: 6px; height: 6px; background: #6d28d9; border-radius: 50%; animation: dotPulse 1.2s infinite; }
-.hearing-thinking .dots span:nth-child(2) { animation-delay: 0.2s; }
-.hearing-thinking .dots span:nth-child(3) { animation-delay: 0.4s; }
-@keyframes dotPulse { 0%,80%,100% { opacity: 0.3; } 40% { opacity: 1; } }
-.hearing-summary { background: #f8fafc; border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-top: 8px; }
-.hearing-summary dt { font-size: 12px; font-weight: 600; color: var(--text-light); margin-top: 8px; }
-.hearing-summary dt:first-child { margin-top: 0; }
-.hearing-summary dd { font-size: 14px; margin-left: 0; margin-top: 2px; }
-
 /* ============================================================
    Chatwork-like Preview UI
    ============================================================ */
@@ -375,8 +353,6 @@ let previewShowTasks = true;
 
 let state = loadState() || {
   step: 1,
-  hearingPhase: 0, // 0=業種選択, 1~N=AI質問, 99=最終確認
-  hearingQA: [],    // [{question, options, answer, round}]
   hearing: {
     industry: '',
     businessType: '',
@@ -435,135 +411,61 @@ function renderSteps() {
 // ============================================================
 function renderStep1(app) {
   const h = state.hearing;
-  const phase = state.hearingPhase || 0;
-
-  if (phase === 0) {
-    // Phase 0: 業種選択
-    app.innerHTML = `
-      <div class="card">
-        <h2>Step 1: ヒアリング</h2>
-        <p style="color:var(--text-light);margin-bottom:20px">お客様の業種・規模に合わせたルーム設計を行います。まず業種を選択してください。</p>
-        <div class="form-group">
-          <label>業種・組織タイプ <span class="label-hint">※ 最も近いものを選択</span></label>
-          <div class="industry-grid" id="industryGrid"></div>
-        </div>
-      </div>
-    `;
-    const ig = document.getElementById('industryGrid');
-    ig.innerHTML = Object.entries(INDUSTRY_TEMPLATES).map(([key, tmpl]) => `
-      <div class="industry-card ${h.industry===key?'selected':''}" onclick="selectIndustryAndStartAI('${key}')">
-        <div class="ic-label">${tmpl.label}</div>
-        <div class="ic-sub">${tmpl.subtitle}</div>
-      </div>
-    `).join('');
-
-  } else if (phase === 99) {
-    // Phase 99: 最終確認 + フリーテキスト
-    renderStep1Final(app);
-
-  } else {
-    // Phase 1~N: AI対話ヒアリング
-    renderStep1Chat(app);
-  }
-}
-
-function renderStep1Chat(app) {
-  const h = state.hearing;
-  const qa = state.hearingQA || [];
-  const tmpl = INDUSTRY_TEMPLATES[h.industry];
-  const currentQ = qa.find(q => !q.answer);
-
-  app.innerHTML = `
-    <div class="card" style="max-width:700px;margin:0 auto">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-        <h2 style="margin-bottom:0">Step 1: ヒアリング</h2>
-        <span style="font-size:12px;color:var(--text-light)">${tmpl?.label || ''}</span>
-      </div>
-
-      <div class="hearing-chat" id="hearingChat">
-        ${qa.map((q, i) => `
-          <div class="hearing-bubble ai">
-            <div class="bubble-label">AI アシスタント</div>
-            <div>${escHtml(q.question)}</div>
-            ${q.answer ? '' : `
-              <div class="hearing-options">
-                ${q.options.map((opt, oi) => `
-                  <button class="hearing-opt" onclick="answerHearingQuestion(${i}, ${oi})">${escHtml(typeof opt === 'string' ? opt : opt.label)}</button>
-                `).join('')}
-              </div>
-            `}
-          </div>
-          ${q.answer ? `<div class="hearing-bubble user">${escHtml(q.answer)}</div>` : ''}
-        `).join('')}
-        <div id="hearingThinking" style="display:none">
-          <div class="hearing-thinking">
-            <div class="dots"><span></span><span></span><span></span></div>
-            次の質問を考えています...
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="nav-bar" style="max-width:700px;margin:16px auto 0">
-      <button class="btn btn-secondary" onclick="resetHearing()">◂ 最初から</button>
-      <button class="btn btn-secondary" onclick="skipToFinal()">スキップして最終確認へ ▸</button>
-    </div>
-  `;
-
-  // スクロール
-  const chat = document.getElementById('hearingChat');
-  if (chat) chat.scrollTop = chat.scrollHeight;
-}
-
-function renderStep1Final(app) {
-  const h = state.hearing;
-  const qa = state.hearingQA || [];
+  const allUseCases = ['社内連絡', '顧客・顧問先対応', 'プロジェクト管理', '日報・週報', '承認・決裁', 'ナレッジ共有', 'タスク管理', '社外連携', '案件管理', 'シフト管理', '申し送り', '品質管理'];
 
   app.innerHTML = `
     <div class="card">
-      <h2>Step 1: 最終確認</h2>
-      <p style="color:var(--text-light);margin-bottom:16px">ヒアリング内容を確認し、必要に応じて修正してください。</p>
+      <h2>Step 1: ヒアリング</h2>
+      <p style="color:var(--text-light);margin-bottom:20px">お客様の業種・規模に合わせたルーム設計を行います。</p>
 
-      <div class="hearing-summary">
-        <dl>
-          <dt>業種</dt><dd>${INDUSTRY_TEMPLATES[h.industry]?.label || h.industry}</dd>
-          <dt>事業内容</dt><dd><input type="text" value="${escHtml(h.businessType)}" placeholder="事業内容を入力" oninput="state.hearing.businessType=this.value;saveState()"></dd>
-          <dt>従業員数</dt>
-          <dd>
-            <div class="size-grid" id="sizeGrid" style="margin-top:6px"></div>
-          </dd>
-          <dt>部署・チーム構成</dt>
-          <dd>
-            <div class="tag-container" id="deptTags" style="margin-top:6px"></div>
-            <div class="tag-input-wrap" style="margin-top:6px">
-              <input type="text" id="deptInput" placeholder="部署名を追加" onkeydown="if(event.key==='Enter'){event.preventDefault();addDept()}">
-              <button class="btn btn-secondary btn-sm" onclick="addDept()">追加</button>
-            </div>
-            <div class="suggested-tags" id="suggestedDepts"></div>
-          </dd>
-        </dl>
+      <div class="form-group">
+        <label>業種・組織タイプ <span class="label-hint">※ 最も近いものを選択</span></label>
+        <div class="industry-grid" id="industryGrid"></div>
       </div>
 
-      ${qa.length > 0 ? `
-        <div style="margin-top:16px">
-          <label>AIヒアリング回答</label>
-          <div class="hearing-summary">
-            ${qa.filter(q => q.answer).map(q => `
-              <dt>${escHtml(q.question)}</dt>
-              <dd>${escHtml(q.answer)}</dd>
-            `).join('')}
-          </div>
-        </div>
-      ` : ''}
+      <div class="form-group">
+        <label>事業内容・業態 <span class="label-hint">（任意）</span></label>
+        <input type="text" id="businessType" value="${escHtml(h.businessType)}" placeholder="例：法人向けSaaS、注文住宅、顧問型税理士事務所など" oninput="state.hearing.businessType=this.value;saveState()">
+      </div>
 
-      <div class="form-group" style="margin-top:16px">
-        <label>その他リクエスト・補足情報 <span class="label-hint">（自由記述）</span></label>
-        <textarea id="freeText" rows="4" placeholder="例：顧客対応は電話とFAXが中心。現場が5箇所あり写真共有が多い。協力会社3社と連携したい。など" oninput="state.hearing.freeText=this.value;saveState()">${escHtml(h.freeText||'')}</textarea>
+      <div class="form-group">
+        <label>従業員数</label>
+        <div class="size-grid" id="sizeGrid"></div>
+      </div>
+
+      <div class="form-group">
+        <label>部署・チーム構成 <span class="label-hint">（ルーム生成に使用）</span></label>
+        <div class="tag-container" id="deptTags"></div>
+        <div class="tag-input-wrap">
+          <input type="text" id="deptInput" placeholder="部署名を入力してEnter" onkeydown="if(event.key==='Enter'){event.preventDefault();addDept()}">
+          <button class="btn btn-secondary btn-sm" onclick="addDept()">追加</button>
+        </div>
+        <div class="suggested-tags" id="suggestedDepts"></div>
+      </div>
+
+      <div class="form-group">
+        <label>主な用途 <span class="label-hint">（複数選択可）</span></label>
+        <div class="usecase-grid" id="useCaseGrid">
+          ${allUseCases.map(uc => {
+            const checked = h.useCases.includes(uc);
+            return `<div class="usecase-item ${checked?'checked':''}" onclick="toggleUseCase('${uc}')">
+              <input type="checkbox" ${checked?'checked':''}>
+              <span>${uc}</span>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>その他リクエスト・補足情報 <span class="label-hint">（自由記述・AIに反映されます）</span></label>
+        <textarea id="freeText" rows="3" placeholder="例：顧客対応は電話とFAXが中心で、それをチャットに置き換えたい。現場が5箇所あり、写真共有を頻繁に行う。社外の協力会社3社とも連携したい。など" oninput="state.hearing.freeText=this.value;saveState()">${escHtml(h.freeText||'')}</textarea>
       </div>
     </div>
 
+    </div>
+
     <div class="nav-bar">
-      <button class="btn btn-secondary" onclick="resetHearing()">◂ 最初から</button>
+      <div class="nav-info">業種と従業員数は必須です</div>
       <div style="display:flex;gap:8px">
         <button class="btn btn-secondary" onclick="goToStep2()" ${!h.industry||!h.companySize?'disabled':''}>テンプレートで設計 ▸</button>
         <button class="btn btn-primary" onclick="goToStep2WithAI()" ${!h.industry||!h.companySize?'disabled':''} style="background:#6d28d9">AIで最適化 ▸</button>
@@ -571,9 +473,18 @@ function renderStep1Final(app) {
     </div>
   `;
 
+  // Render industry grid
+  const ig = document.getElementById('industryGrid');
+  ig.innerHTML = Object.entries(INDUSTRY_TEMPLATES).map(([key, tmpl]) => `
+    <div class="industry-card ${h.industry===key?'selected':''}" onclick="selectIndustry('${key}')">
+      <div class="ic-label">${tmpl.label}</div>
+      <div class="ic-sub">${tmpl.subtitle}</div>
+    </div>
+  `).join('');
+
   // Render size grid
   const sg = document.getElementById('sizeGrid');
-  if (sg) sg.innerHTML = Object.entries(SIZE_SCALE).map(([key, s]) => `
+  sg.innerHTML = Object.entries(SIZE_SCALE).map(([key, s]) => `
     <div class="size-card ${h.companySize===key?'selected':''}" onclick="selectSize('${key}')">
       <div class="sz-label">${s.label}</div>
       <div class="sz-rooms">推奨 ${s.maxRooms}ルーム以内</div>
@@ -594,159 +505,6 @@ function selectIndustry(key) {
     state.hearing.useCases = [...(tmpl.useCases || [])];
   }
   render();
-}
-
-async function selectIndustryAndStartAI(key) {
-  selectIndustry(key);
-  state.hearingPhase = 1;
-  state.hearingQA = [];
-  saveState();
-  render();
-  await generateNextQuestion();
-}
-
-function resetHearing() {
-  state.hearingPhase = 0;
-  state.hearingQA = [];
-  state.hearing = { industry: '', businessType: '', companySize: '', departments: [], useCases: [], freeText: '' };
-  render();
-}
-
-function skipToFinal() {
-  const h = state.hearing;
-  const tmpl = INDUSTRY_TEMPLATES[h.industry];
-  if (tmpl && h.departments.length === 0) {
-    h.departments = [...tmpl.suggestedDepts];
-  }
-  state.hearingPhase = 99;
-  render();
-}
-
-async function generateNextQuestion() {
-  const h = state.hearing;
-  const qa = state.hearingQA;
-  const tmpl = INDUSTRY_TEMPLATES[h.industry];
-  const round = qa.filter(q => q.answer).length + 1;
-
-  // 3ラウンドで終了
-  if (round > 3) {
-    applyQAToHearing();
-    state.hearingPhase = 99;
-    render();
-    return;
-  }
-
-  // thinking表示
-  render();
-  await sleep(100);
-  const thinkEl = document.getElementById('hearingThinking');
-  if (thinkEl) thinkEl.style.display = 'block';
-
-  try {
-    const systemPrompt = `あなたはChatwork導入コンサルタントです。企業にChatwork（ビジネスチャット）を提案するために、ヒアリングの質問を生成してください。
-
-回答は必ず以下のJSON形式のみで返してください。余計な説明は不要です。
-\`\`\`json
-{
-  "question": "質問文",
-  "options": ["選択肢1", "選択肢2", "選択肢3", "選択肢4"]
-}
-\`\`\`
-
-ルール:
-- 質問は1つだけ
-- 選択肢は3-5個
-- 業種に特化した具体的な質問にする
-- 選択肢も業種に即した具体的な内容にする
-- ヒアリングの目的はChatworkのルーム設計に必要な情報を得ること
-- 前の回答を踏まえて、より深掘りする質問を生成する`;
-
-    const prevQA = qa.filter(q => q.answer).map(q => `Q: ${q.question}\nA: ${q.answer}`).join('\n\n');
-
-    const userPrompt = `業種: ${tmpl?.label}（${tmpl?.subtitle}）
-${h.businessType ? `事業内容: ${h.businessType}` : ''}
-
-${prevQA ? `これまでのヒアリング:\n${prevQA}\n` : ''}
-
-ラウンド ${round}/3 の質問を生成してください。
-${round === 1 ? '最初の質問です。この業種の企業の規模感や事業の特徴を把握する質問をしてください。' : ''}
-${round === 2 ? '2問目です。社内のコミュニケーションの現状や課題について聞いてください。' : ''}
-${round === 3 ? '3問目です。Chatwork導入で特に改善したいポイントや、チーム構成について聞いてください。' : ''}`;
-
-    const response = await callLLM(systemPrompt, userPrompt);
-
-    let jsonStr = response;
-    const jsonMatch = response.match(/```json\s*([\s\S]*?)\s*```/) || response.match(/\{[\s\S]*\}/);
-    if (jsonMatch) jsonStr = jsonMatch[1] || jsonMatch[0];
-
-    const parsed = JSON.parse(jsonStr);
-    qa.push({
-      question: parsed.question,
-      options: parsed.options || [],
-      answer: null,
-      round: round,
-    });
-
-    saveState();
-    render();
-  } catch (err) {
-    console.error('AI question generation failed:', err);
-    // フォールバック: 固定質問
-    const fallbackQuestions = [
-      { question: '従業員数を教えてください。', options: ['1-10名', '11-30名', '31-100名', '100名以上'] },
-      { question: '現在の社内コミュニケーション手段は？', options: ['メール中心', '電話・FAX中心', 'LINEなど個人チャット', '他のビジネスチャット', '対面が中心'] },
-      { question: 'Chatwork導入で最も改善したいことは？', options: ['情報共有のスピード', 'タスク管理・進捗把握', '社外との連携', 'ペーパーレス化', 'リモートワーク対応'] },
-    ];
-    const fb = fallbackQuestions[round - 1] || fallbackQuestions[0];
-    qa.push({ question: fb.question, options: fb.options, answer: null, round });
-    saveState();
-    render();
-  }
-}
-
-async function answerHearingQuestion(qIdx, optIdx) {
-  const qa = state.hearingQA;
-  const q = qa[qIdx];
-  if (!q || q.answer) return;
-
-  const opt = q.options[optIdx];
-  q.answer = typeof opt === 'string' ? opt : opt.label;
-  saveState();
-  render();
-
-  // 回答から hearing に情報を反映
-  extractFromAnswer(q);
-
-  await sleep(500);
-  await generateNextQuestion();
-}
-
-function extractFromAnswer(q) {
-  const h = state.hearing;
-  const answer = q.answer;
-
-  // 従業員数を推測
-  if (/1.*10名|〜10|10名以下|10人/.test(answer)) h.companySize = 'micro';
-  else if (/11.*30|〜30|30名以下|20.*名|30人/.test(answer)) h.companySize = 'small';
-  else if (/31.*100|〜100|50.*名|100名以下|80|60|70/.test(answer)) h.companySize = 'medium';
-  else if (/100名以上|100.*超|200|300|500|大規模/.test(answer)) h.companySize = 'large';
-}
-
-function applyQAToHearing() {
-  const h = state.hearing;
-  const tmpl = INDUSTRY_TEMPLATES[h.industry];
-  if (tmpl && h.departments.length === 0) {
-    h.departments = [...tmpl.suggestedDepts];
-  }
-  // QA回答をfreeTextの補足として蓄積（AIプロンプトに渡すため）
-  const qaText = state.hearingQA
-    .filter(q => q.answer)
-    .map(q => `${q.question} → ${q.answer}`)
-    .join('\n');
-  if (qaText && !h.freeText.includes(qaText)) {
-    h.freeText = (h.freeText ? h.freeText + '\n\n' : '') + '【AIヒアリング回答】\n' + qaText;
-  }
-  saveState();
 }
 
 function selectSize(key) {
