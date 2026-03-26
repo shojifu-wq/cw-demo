@@ -461,7 +461,7 @@ function renderStep1(app) {
         <p style="color:var(--text-light);font-size:13px;margin-bottom:12px">Gemini APIキーを設定すると、ヒアリング内容に基づいてAIがルーム設計を最適化し、業種に特化したデモメッセージを自動生成します。</p>
         <div class="form-group" style="margin-bottom:0">
           <div style="display:flex;gap:8px">
-            <input type="password" id="claudeApiKey" value="${escHtml(state.claudeApiKey)}" placeholder="AIza..." oninput="state.claudeApiKey=this.value;localStorage.setItem('cw_claude_api_key',this.value);saveState()" style="flex:1">
+            <input type="password" id="claudeApiKey" value="${escHtml(state.claudeApiKey)}" placeholder="AIza..." oninput="state.claudeApiKey=this.value;localStorage.setItem('cw_claude_api_key',this.value);saveState();document.getElementById('btnAiOptimize').disabled=!this.value||!state.hearing.industry||!state.hearing.companySize" style="flex:1">
           </div>
           <div style="font-size:11px;color:var(--text-light);margin-top:4px">未設定でもテンプレートベースで動作します</div>
         </div>
@@ -472,7 +472,7 @@ function renderStep1(app) {
       <div class="nav-info">業種と従業員数は必須です</div>
       <div style="display:flex;gap:8px">
         <button class="btn btn-primary" onclick="goToStep2()" ${!h.industry||!h.companySize?'disabled':''}>テンプレートで設計 ▸</button>
-        <button class="btn btn-primary" onclick="goToStep2WithAI()" ${!h.industry||!h.companySize||!state.claudeApiKey?'disabled':''} style="background:#6d28d9">AIで最適化 ▸</button>
+        <button class="btn btn-primary" id="btnAiOptimize" onclick="goToStep2WithAI()" ${!h.industry||!h.companySize||!state.claudeApiKey?'disabled':''} style="background:#6d28d9">AIで最適化 ▸</button>
       </div>
     </div>
   `;
