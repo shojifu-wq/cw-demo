@@ -456,23 +456,13 @@ function renderStep1(app) {
       </div>
     </div>
 
-      <div class="card" style="background:linear-gradient(135deg,#f8f0ff,#f0f4ff);border-color:#c4b5fd">
-        <h3 style="color:#6d28d9;margin-bottom:8px">AI最適化（任意）</h3>
-        <p style="color:var(--text-light);font-size:13px;margin-bottom:12px">Gemini APIキーを設定すると、ヒアリング内容に基づいてAIがルーム設計を最適化し、業種に特化したデモメッセージを自動生成します。</p>
-        <div class="form-group" style="margin-bottom:0">
-          <div style="display:flex;gap:8px">
-            <input type="password" id="claudeApiKey" value="${escHtml(state.claudeApiKey)}" placeholder="AIza..." oninput="state.claudeApiKey=this.value;localStorage.setItem('cw_claude_api_key',this.value);saveState();document.getElementById('btnAiOptimize').disabled=!this.value||!state.hearing.industry||!state.hearing.companySize" style="flex:1">
-          </div>
-          <div style="font-size:11px;color:var(--text-light);margin-top:4px">未設定でもテンプレートベースで動作します</div>
-        </div>
-      </div>
     </div>
 
     <div class="nav-bar">
       <div class="nav-info">業種と従業員数は必須です</div>
       <div style="display:flex;gap:8px">
-        <button class="btn btn-primary" onclick="goToStep2()" ${!h.industry||!h.companySize?'disabled':''}>テンプレートで設計 ▸</button>
-        <button class="btn btn-primary" id="btnAiOptimize" onclick="goToStep2WithAI()" ${!h.industry||!h.companySize||!state.claudeApiKey?'disabled':''} style="background:#6d28d9">AIで最適化 ▸</button>
+        <button class="btn btn-secondary" onclick="goToStep2()" ${!h.industry||!h.companySize?'disabled':''}>テンプレートで設計 ▸</button>
+        <button class="btn btn-primary" onclick="goToStep2WithAI()" ${!h.industry||!h.companySize?'disabled':''} style="background:#6d28d9">AIで最適化 ▸</button>
       </div>
     </div>
   `;
@@ -571,9 +561,10 @@ function goToStep2() {
 // Claude API Integration
 // ============================================================
 
+const LLM_PROXY_URL = 'https://cw-demo-gemini-proxy.fukuda-690.workers.dev';
+
 async function callLLM(systemPrompt, userPrompt) {
-  const apiKey = state.claudeApiKey;
-  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, {
+  const res = await fetch(LLM_PROXY_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -584,7 +575,7 @@ async function callLLM(systemPrompt, userPrompt) {
   });
   if (!res.ok) {
     const err = await res.text();
-    throw new Error(`Gemini API Error ${res.status}: ${err}`);
+    throw new Error(`AI API Error ${res.status}: ${err}`);
   }
   const data = await res.json();
   return data.candidates[0].content.parts[0].text;
@@ -751,8 +742,6 @@ function guessArchetype(name, desc, category) {
 
 // AI でデモメッセージを動的生成
 async function generateDemoWithAI() {
-  if (!state.claudeApiKey) { alert('Claude APIキーを設定してください'); return; }
-
   const h = state.hearing;
   const template = INDUSTRY_TEMPLATES[h.industry];
   showLoadingOverlay('業種に特化したデモメッセージを生成しています...');
@@ -972,7 +961,7 @@ function renderStep3(app) {
       <button class="btn btn-secondary" onclick="state.step=2;render()">◂ 戻る</button>
       <div style="display:flex;gap:8px">
         <button class="btn btn-primary" onclick="state.step=4;render()">テンプレートデータで進む ▸</button>
-        <button class="btn btn-primary" onclick="generateDemoWithAI()" ${!state.claudeApiKey?'disabled':''} style="background:#6d28d9">AIでデモ生成 ▸</button>
+        <button class="btn btn-primary" onclick="generateDemoWithAI()" style="background:#6d28d9">AIでデモ生成 ▸</button>
       </div>
     </div>
   `;
