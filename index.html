@@ -359,6 +359,7 @@ let state = loadState() || {
     companySize: '',
     departments: [],
     useCases: [],
+    freeText: '',
   },
   rooms: [],
   demoData: {},
@@ -453,6 +454,11 @@ function renderStep1(app) {
             </div>`;
           }).join('')}
         </div>
+      </div>
+
+      <div class="form-group">
+        <label>その他リクエスト・補足情報 <span class="label-hint">（自由記述・AIに反映されます）</span></label>
+        <textarea id="freeText" rows="3" placeholder="例：顧客対応は電話とFAXが中心で、それをチャットに置き換えたい。現場が5箇所あり、写真共有を頻繁に行う。社外の協力会社3社とも連携したい。など" oninput="state.hearing.freeText=this.value;saveState()">${escHtml(h.freeText||'')}</textarea>
       </div>
     </div>
 
@@ -650,6 +656,7 @@ async function goToStep2WithAI() {
 従業員数: ${SIZE_SCALE[h.companySize]?.label || '不明'}
 部署構成: ${h.departments.join('、')}
 主な用途: ${h.useCases.join('、')}
+${h.freeText ? `\nお客様からのリクエスト・補足情報:\n${h.freeText}` : ''}
 
 テンプレートのベース構成（参考）:
 ${baseRooms.map(r => `- ${r.name}（${r.category}）: ${r.description}`).join('\n')}
@@ -659,6 +666,7 @@ ${baseRooms.map(r => `- ${r.name}（${r.category}）: ${r.description}`).join('\
 - 部署構成に合ったルームを過不足なく設計する
 - 規模感に合ったルーム数にする（${SIZE_SCALE[h.companySize]?.label}規模）
 - 業種特有のルームを追加する
+${h.freeText ? `- お客様のリクエストを最大限反映する` : ''}
 
 ${SIZE_SCALE[h.companySize]?.maxRooms || 15}ルーム程度で提案してください。`;
 
@@ -787,12 +795,14 @@ async function generateDemoWithAI() {
 - 業種: ${template?.label || h.industry}
 - 事業内容: ${h.businessType || '一般的な' + (template?.label || '')}
 - 規模: ${SIZE_SCALE[h.companySize]?.label || '中小企業'}
+${h.freeText ? `- お客様の補足情報: ${h.freeText}` : ''}
 
 対象ルーム:
 ${batch.map(r => `- ID: "${r.id}" / 名前: "${r.name}" / 説明: "${r.description}" / カテゴリ: "${r.category}"`).join('\n')}
 
 各ルームに12-18件のリアルなメッセージと3-6件のタスクを生成してください。
-実際の業務で交わされるような具体的な会話にしてください。`;
+実際の業務で交わされるような具体的な会話にしてください。
+${h.freeText ? 'お客様の補足情報に記載された課題やリクエストを会話内容に反映させてください。' : ''}`;
 
       const response = await callLLM(systemPrompt, userPrompt);
 
